@@ -1,10 +1,76 @@
+import hashlib
+import hmac
 import json
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 from uuid import uuid4
 
 from service.app.operations import preview_operations
+
+
+class PlanNotFoundError(FileNotFoundError):
+    """指定计划不存在。"""
+
+
+class PlanStateError(ValueError):
+    """计划当前状态不允许执行请求的操作。"""
+
+
+class InvalidApprovalTokenError(PermissionError):
+    """确认令牌不正确。"""
+
+
+class ApprovalTokenAlreadyUsedError(PermissionError):
+    """确认令牌已经被使用。"""
+
+
+def _plans_directory(workspace_root: Path) -> Path:
+    return (
+        workspace_root.resolve()
+        / ".file-manager"
+        / "plans"
+    )
+
+
+def _plan_path(workspace_root: Path, plan_id: str) -> Path:
+    return _plans_directory(workspace_root) / f"{plan_id}.json"
+
+
+def _read_plan(
+    workspace_root: Path,
+    plan_id: str,
+) -> dict[str, Any]:
+    plan_path = _plan_path(workspace_root, plan_id)
+    if not plan_path.is_file():
+        raise PlanNotFoundError(f"计划不存在：{plan_id}")
+
+    return json.loads(plan_path.read_text(encoding="utf-8"))
+
+
+def _write_plan(
+    workspace_root: Path,
+    plan: dict[str, Any],
+) -> None:
+    plans_directory = _plans_directory(workspace_root)
+    plans_directory.mkdir(parents=True, exist_ok=True)
+
+    plan_path = plans_directory / f"{plan['plan_id']}.json"
+    temporary_path = plan_path.with_suffix(".json.tmp")
+    temporary_path.write_text(
+        json.dumps(plan, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary_path.replace(plan_path)
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def _build_confirmation(
@@ -64,7 +130,7 @@ def create_plan(
     plan = {
         "plan_id": plan_id,
         "status": "pending_confirmation",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": _utc_now(),
         "file_count": preview["file_count"],
         "operations": preview["operations"],
         "confirmation": _build_confirmation(
@@ -72,16 +138,56 @@ def create_plan(
         ),
     }
 
-    plans_directory = (
-        workspace_root.resolve()
-        / ".file-manager"
-        / "plans"
-    )
-    plans_directory.mkdir(parents=True, exist_ok=True)
-    plan_path = plans_directory / f"{plan_id}.json"
-    plan_path.write_text(
-        json.dumps(plan, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    _write_plan(workspace_root, plan)
 
+    return plan
+
+
+def issue_approval_token(
+    workspace_root: Path,
+    *,
+    plan_id: str,
+) -> str:
+    """为待确认计划签发只返回一次的明文令牌。"""
+    plan = _read_plan(workspace_root, plan_id)
+    if plan["status"] != "pending_confirmation":
+        raise PlanStateError(
+            f"计划状态不允许确认：{plan['status']}"
+        )
+
+    token = secrets.token_urlsafe(32)
+    plan["approval_token_hash"] = _hash_token(token)
+    plan["approved_at"] = _utc_now()
+    plan["status"] = "approved"
+    _write_plan(workspace_root, plan)
+    return token
+
+
+def consume_approval_token(
+    workspace_root: Path,
+    *,
+    plan_id: str,
+    token: str,
+) -> dict[str, Any]:
+    """验证并消费一次性令牌，锁定计划进入执行状态。"""
+    plan = _read_plan(workspace_root, plan_id)
+
+    if plan["status"] == "executing":
+        raise ApprovalTokenAlreadyUsedError(
+            "确认令牌已经被使用"
+        )
+    if plan["status"] != "approved":
+        raise PlanStateError(
+            f"计划状态不允许执行：{plan['status']}"
+        )
+
+    expected_hash = plan["approval_token_hash"]
+    supplied_hash = _hash_token(token)
+    if not hmac.compare_digest(expected_hash, supplied_hash):
+        raise InvalidApprovalTokenError("确认令牌不正确")
+
+    plan.pop("approval_token_hash", None)
+    plan["approval_token_used_at"] = _utc_now()
+    plan["status"] = "executing"
+    _write_plan(workspace_root, plan)
     return plan
