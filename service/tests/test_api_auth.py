@@ -79,3 +79,39 @@ def test_protected_routes_are_unavailable_without_configured_key(
             "message": "服务尚未配置 API Key",
         }
     }
+
+
+def test_unexpected_permission_error_does_not_leak_local_path(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """操作系统权限异常必须作为 500 隐藏本机绝对路径。"""
+    main_module = importlib.import_module("service.app.main")
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    secret_path = r"D:\private\secret.txt"
+
+    def raise_permission_error(*_args, **_kwargs):
+        raise PermissionError(f"拒绝访问：{secret_path}")
+
+    monkeypatch.setattr(
+        main_module,
+        "execute_plan",
+        raise_permission_error,
+    )
+    client = TestClient(
+        main_module.create_app(
+            workspace_root,
+            api_key="test-secret",
+        ),
+        raise_server_exceptions=False,
+    )
+
+    response = client.post(
+        "/plans/00000000-0000-0000-0000-000000000000/execute",
+        json={"approval_token": "token"},
+        headers={"X-API-Key": "test-secret"},
+    )
+
+    assert response.status_code == 500
+    assert secret_path not in response.text

@@ -27,3 +27,36 @@
 - 适用范围：
 - 记录时间：
 ```
+
+---
+
+## [LRN-20260811-001] best_practice
+
+**Logged**: 2026-08-11
+**Priority**: high
+**Status**: resolved
+**Area**: backend
+
+### Summary
+
+Windows 上使用临时文件原子替换持久化计划时，读和写必须共享同一把计划锁。
+
+### Details
+
+只锁一次性令牌的“检查并消费”不足以保护计划文件。执行完成、失败回滚、恢复流程和并发状态读取都会访问同一个 JSON；任一写回未纳入同一把锁，都可能与读取形成文件占用竞态。
+
+### Suggested Action
+
+新增计划状态或持久化路径时，继续调用统一的 `_read_plan`、`_write_plan`，不要绕过它们直接读取或替换计划 JSON。
+
+### Metadata
+
+- Source: error
+- Related Files: service/app/plans.py, service/app/execution.py, service/app/restore.py
+- Tags: windows, concurrency, rlock, atomic-replace
+- Pattern-Key: windows.atomic-plan-file-lock
+- Recurrence-Count: 1
+- First-Seen: 2026-08-11
+- Last-Seen: 2026-08-11
+
+---

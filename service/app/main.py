@@ -21,10 +21,14 @@ from pydantic import BaseModel
 from service.app.execution import execute_plan
 from service.app.file_content import read_file
 from service.app.listing import list_files
-from service.app.operation_logs import read_operation_log
+from service.app.operation_logs import (
+    cleanup_expired_operations,
+    read_operation_log,
+)
 from service.app.paths import resolve_workspace_path
 from service.app.plans import (
     ApprovalTokenAlreadyUsedError,
+    InvalidApprovalTokenError,
     PlanStateError,
     create_plan,
     issue_approval_token,
@@ -103,9 +107,10 @@ def create_app(
         )
 
     @application.exception_handler(PlanStateError)
+    @application.exception_handler(ApprovalTokenAlreadyUsedError)
+    @application.exception_handler(InvalidApprovalTokenError)
     @application.exception_handler(FileExistsError)
     @application.exception_handler(FileNotFoundError)
-    @application.exception_handler(PermissionError)
     @application.exception_handler(ValueError)
     def handle_domain_error(
         _request: Request,
@@ -125,7 +130,7 @@ def create_app(
             status_code = 410
         elif isinstance(error, FileNotFoundError):
             status_code = 404
-        elif isinstance(error, PermissionError):
+        elif isinstance(error, InvalidApprovalTokenError):
             status_code = 403
         else:
             status_code = 400
@@ -308,6 +313,18 @@ def create_app(
             plan_id=plan_id,
             approval_token=request_body.approval_token,
         )
+
+    @application.post(
+        "/maintenance/cleanup-expired-operations"
+    )
+    def cleanup_workspace_operations(
+        _authorized: None = Depends(require_api_key),
+    ) -> dict[str, list[str]]:
+        return {
+            "removed_operation_ids": cleanup_expired_operations(
+                resolved_workspace_root
+            )
+        }
 
     return application
 

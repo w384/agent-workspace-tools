@@ -99,6 +99,47 @@ def test_execute_plan_and_read_operation_log_endpoints(
     assert repeated_response.status_code == 409
 
 
+def test_execute_endpoint_rejects_wrong_token_without_consuming_it(
+    tmp_path: Path,
+):
+    """错误令牌返回 403，并且不能消耗正确令牌。"""
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "notes.txt").write_bytes(b"hello")
+    client = TestClient(_create_application(workspace_root))
+    plan = _create_plan(
+        client,
+        [
+            {
+                "action": "move_rename",
+                "source": "notes.txt",
+                "destination": "sorted-notes.txt",
+            }
+        ],
+    )
+    token = _issue_token(client, plan["plan_id"])
+
+    wrong_response = client.post(
+        f"/plans/{plan['plan_id']}/execute",
+        json={"approval_token": "wrong-token"},
+        headers=_headers(),
+    )
+
+    assert wrong_response.status_code == 403
+    assert wrong_response.json()["error"]["code"] == (
+        "invalid_approval_token"
+    )
+    assert (workspace_root / "notes.txt").is_file()
+
+    correct_response = client.post(
+        f"/plans/{plan['plan_id']}/execute",
+        json={"approval_token": token},
+        headers=_headers(),
+    )
+    assert correct_response.status_code == 200
+    assert (workspace_root / "sorted-notes.txt").is_file()
+
+
 def test_execute_endpoint_consumes_token_once_under_concurrency(
     tmp_path: Path,
 ):
