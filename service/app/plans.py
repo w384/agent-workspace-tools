@@ -74,27 +74,29 @@ def _read_plan(
     workspace_root: Path,
     plan_id: str,
 ) -> dict[str, Any]:
-    plan_path = _plan_path(workspace_root, plan_id)
-    if not plan_path.is_file():
-        raise PlanNotFoundError(f"计划不存在：{plan_id}")
+    with _get_plan_lock(plan_id):
+        plan_path = _plan_path(workspace_root, plan_id)
+        if not plan_path.is_file():
+            raise PlanNotFoundError(f"计划不存在：{plan_id}")
 
-    return json.loads(plan_path.read_text(encoding="utf-8"))
+        return json.loads(plan_path.read_text(encoding="utf-8"))
 
 
 def _write_plan(
     workspace_root: Path,
     plan: dict[str, Any],
 ) -> None:
-    plans_directory = _plans_directory(workspace_root)
-    plans_directory.mkdir(parents=True, exist_ok=True)
+    with _get_plan_lock(plan["plan_id"]):
+        plans_directory = _plans_directory(workspace_root)
+        plans_directory.mkdir(parents=True, exist_ok=True)
 
-    plan_path = plans_directory / f"{plan['plan_id']}.json"
-    temporary_path = plan_path.with_suffix(".json.tmp")
-    temporary_path.write_text(
-        json.dumps(plan, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    temporary_path.replace(plan_path)
+        plan_path = plans_directory / f"{plan['plan_id']}.json"
+        temporary_path = plan_path.with_suffix(".json.tmp")
+        temporary_path.write_text(
+            json.dumps(plan, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(plan_path)
 
 
 def _utc_now() -> str:

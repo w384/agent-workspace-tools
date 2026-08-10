@@ -18,13 +18,22 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from service.app.execution import execute_plan
 from service.app.file_content import read_file
 from service.app.listing import list_files
+from service.app.operation_logs import read_operation_log
 from service.app.paths import resolve_workspace_path
 from service.app.plans import (
+    ApprovalTokenAlreadyUsedError,
     PlanStateError,
     create_plan,
     issue_approval_token,
+)
+from service.app.restore import (
+    OperationNotRestorableError,
+    RestoreWindowExpiredError,
+    create_restore_plan,
+    restore_operation,
 )
 from service.app.search import search_files
 from service.app.upload import save_uploaded_file
@@ -36,6 +45,10 @@ MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 
 class CreatePlanRequest(BaseModel):
     operations: list[dict[str, Any]]
+
+
+class ApprovalTokenRequest(BaseModel):
+    approval_token: str
 
 
 class APIError(Exception):
@@ -98,8 +111,18 @@ def create_app(
         _request: Request,
         error: Exception,
     ) -> JSONResponse:
-        if isinstance(error, (PlanStateError, FileExistsError)):
+        if isinstance(
+            error,
+            (
+                ApprovalTokenAlreadyUsedError,
+                OperationNotRestorableError,
+                PlanStateError,
+                FileExistsError,
+            ),
+        ):
             status_code = 409
+        elif isinstance(error, RestoreWindowExpiredError):
+            status_code = 410
         elif isinstance(error, FileNotFoundError):
             status_code = 404
         elif isinstance(error, PermissionError):
@@ -238,6 +261,53 @@ def create_app(
                 plan_id=plan_id,
             ),
         }
+
+    @application.post("/plans/{plan_id}/execute")
+    def execute_operation_plan(
+        plan_id: str,
+        request_body: ApprovalTokenRequest,
+        _authorized: None = Depends(require_api_key),
+    ) -> dict:
+        return execute_plan(
+            resolved_workspace_root,
+            plan_id=plan_id,
+            approval_token=request_body.approval_token,
+        )
+
+    @application.get("/operations/{operation_id}")
+    def get_operation_log(
+        operation_id: str,
+        _authorized: None = Depends(require_api_key),
+    ) -> dict:
+        return read_operation_log(
+            resolved_workspace_root,
+            operation_id=operation_id,
+        )
+
+    @application.post(
+        "/operations/{operation_id}/restore-plans",
+        status_code=201,
+    )
+    def create_operation_restore_plan(
+        operation_id: str,
+        _authorized: None = Depends(require_api_key),
+    ) -> dict:
+        return create_restore_plan(
+            resolved_workspace_root,
+            operation_id=operation_id,
+        )
+
+    @application.post("/plans/{plan_id}/restore")
+    def execute_operation_restore(
+        plan_id: str,
+        request_body: ApprovalTokenRequest,
+        _authorized: None = Depends(require_api_key),
+    ) -> dict:
+        return restore_operation(
+            resolved_workspace_root,
+            plan_id=plan_id,
+            approval_token=request_body.approval_token,
+        )
 
     return application
 
