@@ -1,5 +1,6 @@
 import importlib
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -71,6 +72,12 @@ def test_execute_plan_applies_create_move_and_trash(
     stored_plan = json.loads(
         plan_path.read_text(encoding="utf-8")
     )
+    operation_log_path = (
+        workspace_root
+        / ".file-manager"
+        / "operations"
+        / f"{plan['plan_id']}.json"
+    )
 
     assert not source_file.exists()
     assert destination_file.read_bytes() == b"draft content"
@@ -81,6 +88,38 @@ def test_execute_plan_applies_create_move_and_trash(
     assert result["file_count"] == 2
     assert stored_plan["status"] == "completed"
     assert stored_plan["completed_at"]
+    assert result["operation_id"] == plan["plan_id"]
+    assert operation_log_path.is_file()
+
+    operation_log = json.loads(
+        operation_log_path.read_text(encoding="utf-8")
+    )
+    completed_at = datetime.fromisoformat(
+        operation_log["completed_at"]
+    )
+    expires_at = datetime.fromisoformat(
+        operation_log["expires_at"]
+    )
+    assert expires_at - completed_at == timedelta(days=14)
+    assert operation_log["status"] == "completed"
+    assert operation_log["undo_actions"] == [
+        {
+            "action": "move",
+            "source": (
+                f".trash/{plan['plan_id']}/old-notes.txt"
+            ),
+            "destination": "old-notes.txt",
+        },
+        {
+            "action": "move",
+            "source": "sorted/final.txt",
+            "destination": "incoming/draft.txt",
+        },
+        {
+            "action": "remove_folder",
+            "path": "sorted",
+        },
+    ]
 
 
 def test_execute_plan_preflight_conflict_changes_no_files(

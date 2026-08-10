@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from service.app.operation_logs import write_operation_log
 from service.app.operations import preview_operations
 from service.app.paths import resolve_workspace_path
 from service.app.plans import (
@@ -186,7 +187,13 @@ def execute_plan(
 
         plan["status"] = "completed"
         plan["completed_at"] = _utc_now()
+        plan["operation_id"] = plan["plan_id"]
         _write_plan(workspace_root, plan)
+        write_operation_log(
+            workspace_root,
+            plan=plan,
+            applied_actions=applied_actions,
+        )
         return plan
     except Exception as execution_error:
         try:
