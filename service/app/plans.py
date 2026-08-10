@@ -4,10 +4,15 @@ import json
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
+from threading import Lock, RLock
 from typing import Any
 from uuid import UUID, uuid4
 
 from service.app.operations import preview_operations
+
+
+_PLAN_LOCKS_GUARD = Lock()
+_PLAN_LOCKS: dict[str, RLock] = {}
 
 
 class PlanNotFoundError(FileNotFoundError):
@@ -45,6 +50,16 @@ def _normalize_plan_id(plan_id: str) -> str:
         raise InvalidPlanIdError(
             f"计划编号无效：{plan_id}"
         ) from error
+
+
+def _get_plan_lock(plan_id: str) -> RLock:
+    normalized_plan_id = _normalize_plan_id(plan_id)
+    with _PLAN_LOCKS_GUARD:
+        lock = _PLAN_LOCKS.get(normalized_plan_id)
+        if lock is None:
+            lock = RLock()
+            _PLAN_LOCKS[normalized_plan_id] = lock
+        return lock
 
 
 def _plan_path(workspace_root: Path, plan_id: str) -> Path:
@@ -166,18 +181,19 @@ def issue_approval_token(
     plan_id: str,
 ) -> str:
     """为待确认计划签发只返回一次的明文令牌。"""
-    plan = _read_plan(workspace_root, plan_id)
-    if plan["status"] != "pending_confirmation":
-        raise PlanStateError(
-            f"计划状态不允许确认：{plan['status']}"
-        )
+    with _get_plan_lock(plan_id):
+        plan = _read_plan(workspace_root, plan_id)
+        if plan["status"] != "pending_confirmation":
+            raise PlanStateError(
+                f"计划状态不允许确认：{plan['status']}"
+            )
 
-    token = secrets.token_urlsafe(32)
-    plan["approval_token_hash"] = _hash_token(token)
-    plan["approved_at"] = _utc_now()
-    plan["status"] = "approved"
-    _write_plan(workspace_root, plan)
-    return token
+        token = secrets.token_urlsafe(32)
+        plan["approval_token_hash"] = _hash_token(token)
+        plan["approved_at"] = _utc_now()
+        plan["status"] = "approved"
+        _write_plan(workspace_root, plan)
+        return token
 
 
 def consume_approval_token(
@@ -187,24 +203,25 @@ def consume_approval_token(
     token: str,
 ) -> dict[str, Any]:
     """验证并消费一次性令牌，锁定计划进入执行状态。"""
-    plan = _read_plan(workspace_root, plan_id)
+    with _get_plan_lock(plan_id):
+        plan = _read_plan(workspace_root, plan_id)
 
-    if plan["status"] == "executing":
-        raise ApprovalTokenAlreadyUsedError(
-            "确认令牌已经被使用"
-        )
-    if plan["status"] != "approved":
-        raise PlanStateError(
-            f"计划状态不允许执行：{plan['status']}"
-        )
+        if plan["status"] == "executing":
+            raise ApprovalTokenAlreadyUsedError(
+                "确认令牌已经被使用"
+            )
+        if plan["status"] != "approved":
+            raise PlanStateError(
+                f"计划状态不允许执行：{plan['status']}"
+            )
 
-    expected_hash = plan["approval_token_hash"]
-    supplied_hash = _hash_token(token)
-    if not hmac.compare_digest(expected_hash, supplied_hash):
-        raise InvalidApprovalTokenError("确认令牌不正确")
+        expected_hash = plan["approval_token_hash"]
+        supplied_hash = _hash_token(token)
+        if not hmac.compare_digest(expected_hash, supplied_hash):
+            raise InvalidApprovalTokenError("确认令牌不正确")
 
-    plan.pop("approval_token_hash", None)
-    plan["approval_token_used_at"] = _utc_now()
-    plan["status"] = "executing"
-    _write_plan(workspace_root, plan)
-    return plan
+        plan.pop("approval_token_hash", None)
+        plan["approval_token_used_at"] = _utc_now()
+        plan["status"] = "executing"
+        _write_plan(workspace_root, plan)
+        return plan

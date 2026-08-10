@@ -1,6 +1,9 @@
 import importlib
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 from uuid import UUID
 
 import pytest
@@ -211,3 +214,69 @@ def test_plan_id_rejects_path_traversal(
     assert escaped_plan_path.read_text(
         encoding="utf-8"
     ) == original_text
+
+
+def test_concurrent_token_consumption_allows_one_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """并发消费同一令牌时只能有一个请求进入执行状态。"""
+    plans_module = importlib.import_module("service.app.plans")
+    workspace_root, plan = _create_single_move_plan(
+        plans_module,
+        tmp_path,
+    )
+    token = plans_module.issue_approval_token(
+        workspace_root,
+        plan_id=plan["plan_id"],
+    )
+
+    real_write_plan = plans_module._write_plan
+
+    def slow_executing_write(root: Path, stored_plan: dict):
+        if stored_plan.get("status") == "executing":
+            time.sleep(0.05)
+        return real_write_plan(root, stored_plan)
+
+    monkeypatch.setattr(
+        plans_module,
+        "_write_plan",
+        slow_executing_write,
+    )
+
+    worker_count = 6
+    start_barrier = Barrier(worker_count)
+
+    def consume_once():
+        start_barrier.wait()
+        try:
+            plans_module.consume_approval_token(
+                workspace_root,
+                plan_id=plan["plan_id"],
+                token=token,
+            )
+            return "success"
+        except Exception as error:
+            return error
+
+    with ThreadPoolExecutor(
+        max_workers=worker_count
+    ) as executor:
+        results = list(
+            executor.map(
+                lambda _: consume_once(),
+                range(worker_count),
+            )
+        )
+
+    successes = [result for result in results if result == "success"]
+    failures = [result for result in results if result != "success"]
+    assert len(successes) == 1
+    assert len(failures) == worker_count - 1
+    assert all(
+        isinstance(
+            failure,
+            plans_module.ApprovalTokenAlreadyUsedError,
+        )
+        for failure in failures
+    )

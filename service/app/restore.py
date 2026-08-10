@@ -248,28 +248,27 @@ def restore_operation(
         workspace_root,
         operation_id=operation_id,
     )
-    expires_at = datetime.fromisoformat(
-        operation_log["expires_at"]
-    )
-    if expires_at <= datetime.now(timezone.utc):
-        raise RestoreWindowExpiredError(
-            "操作已经超过14天恢复窗口"
-        )
-    if (
-        operation_log["status"] != "restore_pending"
-        or operation_log.get("restore_plan_id") != plan_id
-    ):
-        raise OperationNotRestorableError(
-            "操作日志与恢复计划状态不匹配"
-        )
-
     applied_actions: list[dict[str, Any]] = []
-    original_plan = _read_plan(
-        workspace_root,
-        operation_log["plan_id"],
-    )
 
     try:
+        expires_at = datetime.fromisoformat(
+            operation_log["expires_at"]
+        )
+        if expires_at <= datetime.now(timezone.utc):
+            raise RestoreWindowExpiredError(
+                "操作已经超过14天恢复窗口"
+            )
+        if (
+            operation_log["status"] != "restore_pending"
+            or operation_log.get("restore_plan_id") != plan_id
+        ):
+            raise OperationNotRestorableError(
+                "操作日志与恢复计划状态不匹配"
+            )
+        original_plan = _read_plan(
+            workspace_root,
+            operation_log["plan_id"],
+        )
         _preflight_restore(
             workspace_root,
             operation_id,

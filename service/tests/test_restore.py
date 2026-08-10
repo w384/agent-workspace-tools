@@ -211,3 +211,63 @@ def test_restore_operation_restores_files_and_marks_log(
             workspace_root,
             operation_id=completed_plan["operation_id"],
         )
+
+
+def test_restore_expiring_after_approval_resets_operation_state(
+    tmp_path: Path,
+):
+    """令牌签发后日志过期时，恢复计划不能卡在执行状态。"""
+    workspace_root, completed_plan = (
+        _execute_recoverable_operation(tmp_path)
+    )
+    plans_module = importlib.import_module("service.app.plans")
+    restore_module = importlib.import_module("service.app.restore")
+
+    restore_plan = restore_module.create_restore_plan(
+        workspace_root,
+        operation_id=completed_plan["operation_id"],
+    )
+    token = plans_module.issue_approval_token(
+        workspace_root,
+        plan_id=restore_plan["plan_id"],
+    )
+
+    operation_log_path = (
+        workspace_root
+        / ".file-manager"
+        / "operations"
+        / f"{completed_plan['operation_id']}.json"
+    )
+    operation_log = json.loads(
+        operation_log_path.read_text(encoding="utf-8")
+    )
+    operation_log["expires_at"] = "2000-01-01T00:00:00+00:00"
+    operation_log_path.write_text(
+        json.dumps(operation_log),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(restore_module.RestoreWindowExpiredError):
+        restore_module.restore_operation(
+            workspace_root,
+            plan_id=restore_plan["plan_id"],
+            approval_token=token,
+        )
+
+    restore_plan_path = (
+        workspace_root
+        / ".file-manager"
+        / "plans"
+        / f"{restore_plan['plan_id']}.json"
+    )
+    stored_restore_plan = json.loads(
+        restore_plan_path.read_text(encoding="utf-8")
+    )
+    stored_operation_log = json.loads(
+        operation_log_path.read_text(encoding="utf-8")
+    )
+    assert stored_restore_plan["status"] == "failed"
+    assert stored_restore_plan["rollback_status"] == "completed"
+    assert stored_operation_log["status"] == "completed"
+    assert "restore_plan_id" not in stored_operation_log
+    assert (workspace_root / "sorted" / "final.txt").is_file()
