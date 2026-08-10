@@ -9,12 +9,79 @@ from uuid import UUID
 RETENTION_DAYS = 14
 
 
+class OperationLogNotFoundError(FileNotFoundError):
+    """指定操作日志不存在。"""
+
+
+class InvalidOperationIdError(ValueError):
+    """操作编号不是合法 UUID。"""
+
+
 def _operations_directory(workspace_root: Path) -> Path:
     return (
         workspace_root.resolve()
         / ".file-manager"
         / "operations"
     )
+
+
+def _normalize_operation_id(operation_id: str) -> str:
+    try:
+        return str(UUID(operation_id))
+    except (AttributeError, TypeError, ValueError) as error:
+        raise InvalidOperationIdError(
+            f"操作编号无效：{operation_id}"
+        ) from error
+
+
+def _operation_path(
+    workspace_root: Path,
+    operation_id: str,
+) -> Path:
+    normalized_operation_id = _normalize_operation_id(operation_id)
+    return (
+        _operations_directory(workspace_root)
+        / f"{normalized_operation_id}.json"
+    )
+
+
+def read_operation_log(
+    workspace_root: Path,
+    *,
+    operation_id: str,
+) -> dict[str, Any]:
+    operation_path = _operation_path(
+        workspace_root,
+        operation_id,
+    )
+    if not operation_path.is_file():
+        raise OperationLogNotFoundError(
+            f"操作日志不存在：{operation_id}"
+        )
+    return json.loads(
+        operation_path.read_text(encoding="utf-8")
+    )
+
+
+def write_operation_log_record(
+    workspace_root: Path,
+    operation_log: dict[str, Any],
+) -> None:
+    operation_path = _operation_path(
+        workspace_root,
+        operation_log["operation_id"],
+    )
+    operation_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = operation_path.with_suffix(".json.tmp")
+    temporary_path.write_text(
+        json.dumps(
+            operation_log,
+            ensure_ascii=False,
+            indent=2,
+        ) + "\n",
+        encoding="utf-8",
+    )
+    temporary_path.replace(operation_path)
 
 
 def _relative_path(workspace_root: Path, path: Path) -> str:
@@ -79,19 +146,7 @@ def write_operation_log(
         ),
     }
 
-    operations_directory = _operations_directory(workspace_root)
-    operations_directory.mkdir(parents=True, exist_ok=True)
-    operation_path = operations_directory / f"{operation_id}.json"
-    temporary_path = operation_path.with_suffix(".json.tmp")
-    temporary_path.write_text(
-        json.dumps(
-            operation_log,
-            ensure_ascii=False,
-            indent=2,
-        ) + "\n",
-        encoding="utf-8",
-    )
-    temporary_path.replace(operation_path)
+    write_operation_log_record(workspace_root, operation_log)
     return operation_log
 
 
