@@ -5,13 +5,17 @@ import secrets
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from service.app.operations import preview_operations
 
 
 class PlanNotFoundError(FileNotFoundError):
     """指定计划不存在。"""
+
+
+class InvalidPlanIdError(ValueError):
+    """计划编号不是合法 UUID。"""
 
 
 class PlanStateError(ValueError):
@@ -34,8 +38,21 @@ def _plans_directory(workspace_root: Path) -> Path:
     )
 
 
+def _normalize_plan_id(plan_id: str) -> str:
+    try:
+        return str(UUID(plan_id))
+    except (AttributeError, TypeError, ValueError) as error:
+        raise InvalidPlanIdError(
+            f"计划编号无效：{plan_id}"
+        ) from error
+
+
 def _plan_path(workspace_root: Path, plan_id: str) -> Path:
-    return _plans_directory(workspace_root) / f"{plan_id}.json"
+    normalized_plan_id = _normalize_plan_id(plan_id)
+    return (
+        _plans_directory(workspace_root)
+        / f"{normalized_plan_id}.json"
+    )
 
 
 def _read_plan(

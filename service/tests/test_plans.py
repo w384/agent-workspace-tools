@@ -173,3 +173,41 @@ def test_invalid_approval_token_does_not_consume_plan(
         token=token,
     )
     assert consumed_plan["status"] == "executing"
+
+
+def test_plan_id_rejects_path_traversal(
+    tmp_path: Path,
+):
+    """外部输入的计划编号不能逃出内部 plans 目录。"""
+    plans_module = importlib.import_module("service.app.plans")
+    workspace_root = tmp_path / "workspace"
+    plans_directory = (
+        workspace_root / ".file-manager" / "plans"
+    )
+    plans_directory.mkdir(parents=True)
+
+    escaped_plan_path = workspace_root / "escaped.json"
+    escaped_plan = {
+        "plan_id": "../../escaped",
+        "status": "pending_confirmation",
+    }
+    escaped_plan_path.write_text(
+        json.dumps(escaped_plan),
+        encoding="utf-8",
+    )
+    original_text = escaped_plan_path.read_text(
+        encoding="utf-8"
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="计划编号无效",
+    ):
+        plans_module.issue_approval_token(
+            workspace_root,
+            plan_id="../../escaped",
+        )
+
+    assert escaped_plan_path.read_text(
+        encoding="utf-8"
+    ) == original_text
