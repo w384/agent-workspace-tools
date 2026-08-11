@@ -13,6 +13,12 @@ from service.app.operations import preview_operations
 
 _PLAN_LOCKS_GUARD = Lock()
 _PLAN_LOCKS: dict[str, RLock] = {}
+_PLAN_STATUS_FIELDS = (
+    "plan_id", "status", "plan_type", "file_count",
+    "created_at", "approved_at", "completed_at",
+    "failed_at", "operation_id", "rollback_status",
+    "error_type",
+)
 
 
 class PlanNotFoundError(FileNotFoundError):
@@ -80,6 +86,19 @@ def _read_plan(
             raise PlanNotFoundError(f"计划不存在：{plan_id}")
 
         return json.loads(plan_path.read_text(encoding="utf-8"))
+
+
+def read_plan_status(
+    workspace_root: Path,
+    *,
+    plan_id: str,
+) -> dict[str, Any]:
+    plan = _read_plan(workspace_root, plan_id)
+    return {
+        key: plan[key]
+        for key in _PLAN_STATUS_FIELDS
+        if key in plan
+    }
 
 
 def _write_plan(

@@ -32,6 +32,7 @@ from service.app.plans import (
     PlanStateError,
     create_plan,
     issue_approval_token,
+    read_plan_status,
 )
 from service.app.restore import (
     OperationNotRestorableError,
@@ -250,6 +251,16 @@ def create_app(
         return create_plan(
             resolved_workspace_root,
             operations=request_body.operations,
+        )
+
+    @application.get("/plans/{plan_id}")
+    def get_operation_plan(
+        plan_id: str,
+        _authorized: None = Depends(require_api_key),
+    ) -> dict:
+        return read_plan_status(
+            resolved_workspace_root,
+            plan_id=plan_id,
         )
 
     @application.post(

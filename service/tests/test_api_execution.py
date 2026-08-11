@@ -1,6 +1,7 @@
 import importlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
@@ -40,6 +41,48 @@ def _issue_token(client: TestClient, plan_id: str) -> str:
     )
     assert response.status_code == 200
     return response.json()["approval_token"]
+
+
+def test_get_plan_status_returns_safe_projection(
+    tmp_path: Path,
+):
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "notes.txt").write_bytes(b"hello")
+    client = TestClient(_create_application(workspace_root))
+    plan = _create_plan(
+        client,
+        [{
+            "action": "move_rename",
+            "source": "notes.txt",
+            "destination": "archive/notes.txt",
+        }],
+    )
+
+    response = client.get(
+        f"/plans/{plan['plan_id']}",
+        headers=_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "pending_confirmation"
+    assert "operations" not in response.json()
+
+
+def test_get_plan_status_returns_plan_not_found(
+    tmp_path: Path,
+):
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    client = TestClient(_create_application(workspace_root))
+
+    response = client.get(
+        f"/plans/{uuid4()}",
+        headers=_headers(),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "plan_not_found"
 
 
 def test_execute_plan_and_read_operation_log_endpoints(

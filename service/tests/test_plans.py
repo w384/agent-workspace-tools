@@ -101,6 +101,39 @@ def _create_single_move_plan(
     return workspace_root, plan
 
 
+def test_read_plan_status_excludes_operations_and_token_hash(
+    tmp_path: Path,
+):
+    plans_module = importlib.import_module("service.app.plans")
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "notes.txt").write_text(
+        "hello",
+        encoding="utf-8",
+    )
+    plan = plans_module.create_plan(
+        workspace_root,
+        operations=[{
+            "action": "move_rename",
+            "source": "notes.txt",
+            "destination": "archive/notes.txt",
+        }],
+    )
+    plans_module.issue_approval_token(
+        workspace_root,
+        plan_id=plan["plan_id"],
+    )
+
+    result = plans_module.read_plan_status(
+        workspace_root,
+        plan_id=plan["plan_id"],
+    )
+
+    assert result["status"] == "approved"
+    assert "operations" not in result
+    assert "approval_token_hash" not in result
+
+
 def test_approval_token_is_hashed_and_can_only_be_used_once(
     tmp_path: Path,
 ):

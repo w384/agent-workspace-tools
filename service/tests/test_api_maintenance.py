@@ -105,6 +105,7 @@ def test_all_business_routes_reject_missing_api_key(
             files={"file": ("x.txt", b"x", "text/plain")},
         ),
         client.post("/plans", json={"operations": []}),
+        client.get(f"/plans/{resource_id}"),
         client.post(f"/plans/{resource_id}/approval-token"),
         client.post(
             f"/plans/{resource_id}/execute",
