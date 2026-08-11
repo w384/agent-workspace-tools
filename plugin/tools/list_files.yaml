@@ -48,7 +48,7 @@ output_schema:
       type: integer
     has_more:
       type: boolean
-    files:
+    items:
       type: array
       items:
         type: object
@@ -64,7 +64,7 @@ output_schema:
           modified_at:
             type: string
         required: [path, name, extension, size_bytes, modified_at]
-  required: [total, page, page_size, has_more, files]
+  required: [total, page, page_size, has_more, items]
 extra:
   python:
     source: tools/list_files.py

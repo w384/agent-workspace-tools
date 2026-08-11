@@ -110,7 +110,13 @@ def test_list_files_yields_text_json_and_all_declared_variables() -> None:
     ]
     assert "合同.txt" in _text(messages)
     assert _json(messages) == result
-    assert _variables(messages) == result
+    assert _variables(messages) == {
+    "total": result["total"],
+    "page": result["page"],
+    "page_size": result["page_size"],
+    "has_more": result["has_more"],
+    "items": result["files"],
+}
 
 
 def test_search_files_yields_results_and_uses_trimmed_nonblank_query() -> None:
@@ -131,7 +137,13 @@ def test_search_files_yields_results_and_uses_trimmed_nonblank_query() -> None:
     ]
     assert "合同.txt" in _text(messages)
     assert _json(messages) == result
-    assert _variables(messages) == result
+    assert _variables(messages) == {
+    "total": result["total"],
+    "page": result["page"],
+    "page_size": result["page_size"],
+    "has_more": result["has_more"],
+    "items": result["files"],
+}
 
 
 def test_search_files_rejects_blank_query_before_calling_service() -> None:
@@ -205,8 +217,8 @@ def test_read_tool_yaml_declares_real_outputs_limits_and_registration() -> None:
     ]
 
     expected_outputs = {
-        "list_files": {"total", "page", "page_size", "has_more", "files"},
-        "search_files": {"total", "page", "page_size", "has_more", "files"},
+        "list_files": {"total", "page", "page_size", "has_more", "items"},
+        "search_files": {"total", "page", "page_size", "has_more", "items"},
         "get_file": {
             "path",
             "name",
@@ -224,6 +236,7 @@ def test_read_tool_yaml_declares_real_outputs_limits_and_registration() -> None:
             )
         )
         assert set(configuration["output_schema"]["properties"]) == output_names
+        assert {"json", "text", "files"}.isdisjoint(output_names)
         parameters = {
             parameter["name"]: parameter
             for parameter in configuration.get("parameters", [])
