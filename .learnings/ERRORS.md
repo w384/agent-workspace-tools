@@ -19,6 +19,46 @@
 
 ---
 
+## [ERR-20260811-002] local_dify_preflight_assumptions
+
+**Logged**: 2026-08-11
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+
+本机 Dify 联调预检不应猜测配置模块文件名，也不能仅凭 Docker Desktop 窗口曾启动就假定 Linux Engine 当前可用。
+
+### Error
+
+```text
+Get-Content: service/app/configuration.py 不存在
+docker ps: 找不到 dockerDesktopLinuxEngine 命名管道
+```
+
+### Context
+
+- 进入最小闭环端到端配置前，尝试读取一个未由 `rg --files` 证实的配置文件名。
+- 同一只读命令尝试连接 Docker API，但 Docker Linux Engine 当时未提供命名管道。
+- 命令没有修改产品文件或真实工作区。
+
+### Suggested Fix
+
+预检先用 `rg --files service/app` 确认真实模块，再从 `main.py` 追踪环境变量；Docker 状态先检查进程和 `docker info`，只有引擎实际可连通后才进入 Dify UI 配置。
+
+### Metadata
+
+- Reproducible: yes
+- Related Files: service/app/main.py
+
+### Resolution
+
+- **Resolved**: 2026-08-11
+- **Notes**: 已切换为文件清单与进程状态驱动的预检，不再重复猜测路径或假定 Docker 引擎在线。
+
+---
+
 ## [ERR-20260811-001] concurrent_plan_file_replace
 
 **Logged**: 2026-08-11
