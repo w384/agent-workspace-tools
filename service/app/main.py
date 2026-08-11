@@ -3,7 +3,7 @@ import hmac
 import os
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from fastapi import (
     Depends,
@@ -46,6 +46,32 @@ from service.app.upload import save_uploaded_file
 
 DEFAULT_WORKSPACE_ROOT = Path(r"D:\AI\AgentWorkspace")
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+
+
+def load_api_key(environment: Mapping[str, str]) -> str:
+    direct_value = environment.get(
+        "DIFY_AGENT_WORKSPACE_API_KEY", ""
+    ).strip()
+    if direct_value:
+        return direct_value
+
+    key_file_value = environment.get(
+        "DIFY_AGENT_WORKSPACE_API_KEY_FILE", ""
+    ).strip()
+    if not key_file_value:
+        return ""
+
+    try:
+        file_value = Path(key_file_value).read_text(
+            encoding="utf-8"
+        ).strip()
+    except OSError as error:
+        raise RuntimeError(
+            "无法读取 API Key 密钥文件"
+        ) from error
+    if not file_value:
+        raise RuntimeError("API Key 密钥文件为空")
+    return file_value
 
 
 class CreatePlanRequest(BaseModel):
@@ -347,8 +373,5 @@ app = create_app(
             str(DEFAULT_WORKSPACE_ROOT),
         )
     ),
-    api_key=os.environ.get(
-        "DIFY_AGENT_WORKSPACE_API_KEY",
-        "",
-    ),
+    api_key=load_api_key(os.environ),
 )
