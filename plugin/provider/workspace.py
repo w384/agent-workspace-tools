@@ -3,7 +3,8 @@ from typing import Any
 from dify_plugin import ToolProvider
 from dify_plugin.errors.tool import ToolProviderCredentialValidationError
 
-from plugin.internal.client import WorkspaceClient
+from internal.client import WorkspaceClient
+from internal.messages import safe_service_message
 
 
 class WorkspaceProvider(ToolProvider):
@@ -18,6 +19,10 @@ class WorkspaceProvider(ToolProvider):
                 params={"page": 1, "page_size": 1},
             )
         except Exception as error:
+            message = safe_service_message(
+                error,
+                api_key=str(credentials.get("api_key", "")),
+            )
             raise ToolProviderCredentialValidationError(
-                f"本机文件服务凭据验证失败：{error}"
-            ) from error
+                f"本机文件服务凭据验证失败：{message}"
+            ) from None

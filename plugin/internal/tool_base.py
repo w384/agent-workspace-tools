@@ -1,6 +1,6 @@
 from dify_plugin import Tool
 
-from plugin.internal.client import WorkspaceClient
+from .client import WorkspaceClient
 
 
 class WorkspaceTool(Tool):

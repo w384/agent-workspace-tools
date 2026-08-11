@@ -2,8 +2,9 @@ from typing import Any
 
 import requests
 
-from plugin.internal.messages import (
+from .messages import (
     INVALID_SERVICE_RESPONSE_MESSAGE,
+    SERVICE_CONNECTION_MESSAGE,
     SERVICE_TIMEOUT_MESSAGE,
     safe_service_message,
 )
@@ -51,12 +52,17 @@ class WorkspaceClient:
                     timeout=self.timeout_seconds,
                     **kwargs,
                 )
-            except requests.Timeout:
+            except requests.RequestException as error:
                 if attempt + 1 < attempts:
                     continue
-                raise WorkspaceTimeoutError(
-                    "service_timeout",
-                    SERVICE_TIMEOUT_MESSAGE,
+                if isinstance(error, requests.Timeout):
+                    raise WorkspaceTimeoutError(
+                        "service_timeout",
+                        SERVICE_TIMEOUT_MESSAGE,
+                    ) from None
+                raise WorkspaceServiceError(
+                    "service_unavailable",
+                    SERVICE_CONNECTION_MESSAGE,
                 ) from None
 
             try:
@@ -68,8 +74,16 @@ class WorkspaceClient:
                     response.status_code,
                 ) from None
 
+            if not isinstance(payload, dict):
+                raise WorkspaceServiceError(
+                    "invalid_service_response",
+                    INVALID_SERVICE_RESPONSE_MESSAGE,
+                    response.status_code,
+                )
             if response.status_code >= 400:
                 detail = payload.get("error", {})
+                if not isinstance(detail, dict):
+                    detail = {}
                 message = safe_service_message(
                     detail.get("message"),
                     api_key=self.api_key,
@@ -77,12 +91,6 @@ class WorkspaceClient:
                 raise WorkspaceServiceError(
                     str(detail.get("code", "service_error")),
                     message,
-                    response.status_code,
-                )
-            if not isinstance(payload, dict):
-                raise WorkspaceServiceError(
-                    "invalid_service_response",
-                    INVALID_SERVICE_RESPONSE_MESSAGE,
                     response.status_code,
                 )
             return payload

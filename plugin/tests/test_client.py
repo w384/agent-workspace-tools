@@ -4,14 +4,14 @@ from unittest.mock import Mock
 import pytest
 import requests
 
-from plugin.internal.client import (
+from internal.client import (
     WorkspaceClient,
     WorkspaceServiceError,
     WorkspaceTimeoutError,
 )
 
 
-def _response(status_code: int, payload: dict[str, object]) -> Mock:
+def _response(status_code: int, payload: object) -> Mock:
     response = Mock()
     response.status_code = status_code
     response.json.return_value = payload
@@ -94,6 +94,27 @@ def test_get_timeout_stops_after_three_attempts() -> None:
     assert session.request.call_count == 3
 
 
+def test_request_exception_becomes_sanitized_structured_error() -> None:
+    api_key = "do-not-leak"
+    absolute_path = r"D:\AI\AgentWorkspace\private.txt"
+    session = Mock(spec=requests.Session)
+    session.request.side_effect = requests.ConnectionError(
+        f"proxy failed with {api_key} while opening {absolute_path}"
+    )
+    client = WorkspaceClient("http://service", api_key, session=session)
+
+    with pytest.raises(WorkspaceServiceError) as caught:
+        client.request("GET", "/files")
+
+    assert caught.value.code == "service_unavailable"
+    assert caught.value.status_code is None
+    assert str(caught.value) == "本机文件服务连接失败"
+    formatted_error = "".join(traceback.format_exception(caught.value))
+    assert api_key not in formatted_error
+    assert absolute_path not in formatted_error
+    assert session.request.call_count == 3
+
+
 def test_invalid_json_becomes_structured_service_error() -> None:
     session = Mock(spec=requests.Session)
     response = Mock()
@@ -136,3 +157,63 @@ def test_service_error_parses_code_and_sanitizes_sensitive_message() -> None:
     assert str(caught.value) == "本机文件服务请求失败"
     assert api_key not in str(caught.value)
     assert absolute_path not in str(caught.value)
+
+
+@pytest.mark.parametrize("payload", [[], None])
+def test_http_error_with_non_object_payload_is_invalid_response(
+    payload: object,
+) -> None:
+    session = Mock(spec=requests.Session)
+    session.request.return_value = _response(500, payload)
+    client = WorkspaceClient("http://service", "key", session=session)
+
+    with pytest.raises(WorkspaceServiceError) as caught:
+        client.request("GET", "/files")
+
+    assert caught.value.code == "invalid_service_response"
+    assert caught.value.status_code == 500
+    assert str(caught.value) == "本机文件服务返回了无法解析的响应"
+
+
+def test_http_error_with_non_object_detail_is_structured_service_error() -> None:
+    session = Mock(spec=requests.Session)
+    session.request.return_value = _response(500, {"error": "upstream failed"})
+    client = WorkspaceClient("http://service", "key", session=session)
+
+    with pytest.raises(WorkspaceServiceError) as caught:
+        client.request("GET", "/files")
+
+    assert caught.value.code == "service_error"
+    assert caught.value.status_code == 500
+    assert str(caught.value) == "本机文件服务请求失败"
+
+
+@pytest.mark.parametrize(
+    "absolute_path",
+    [
+        r"\\server\share\private.txt",
+        r"\Users\private\secrets.json",
+    ],
+)
+def test_service_error_sanitizes_unc_and_rooted_windows_paths(
+    absolute_path: str,
+) -> None:
+    session = Mock(spec=requests.Session)
+    session.request.return_value = _response(
+        500,
+        {
+            "error": {
+                "code": "workspace_error",
+                "message": f"Cannot open {absolute_path}",
+            }
+        },
+    )
+    client = WorkspaceClient("http://service", "key", session=session)
+
+    with pytest.raises(WorkspaceServiceError) as caught:
+        client.request("GET", "/files")
+
+    assert str(caught.value) == "本机文件服务请求失败"
+    formatted_error = "".join(traceback.format_exception(caught.value))
+    assert absolute_path not in str(caught.value)
+    assert absolute_path not in formatted_error
