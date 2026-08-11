@@ -1,0 +1,35 @@
+version: 0.0.1
+type: plugin
+author: tianh
+name: plugin
+label:
+  en_US: plugin
+  ja_JP: plugin
+  zh_Hans: plugin
+  pt_BR: plugin
+description:
+  en_US: Workspace tools
+  ja_JP: Workspace tools
+  zh_Hans: Workspace tools
+  pt_BR: Workspace tools
+icon: icon.svg
+icon_dark: icon-dark.svg
+resource:
+  memory: 268435456
+  permission: {}
+plugins:
+  tools:
+    - provider/workspace.yaml
+meta:
+  version: 0.0.1
+  arch:
+    - amd64
+    - arm64
+  runner:
+    language: python
+    version: "3.12"
+    entrypoint: main
+  minimum_dify_version: null
+created_at: 2026-08-11T14:00:44.0341443+08:00
+privacy: PRIVACY.md
+verified: false

@@ -1,0 +1,34 @@
+identity:
+  name: "plugin"
+  author: "tianh"
+  label:
+    en_US: "plugin"
+    zh_Hans: "plugin"
+    pt_BR: "plugin"
+    ja_JP: "plugin"
+description:
+  human:
+    en_US: "Workspace tools"
+    zh_Hans: "Workspace tools"
+    pt_BR: "Workspace tools"
+    ja_JP: "Workspace tools"
+  llm: "Workspace tools"
+parameters:
+  - name: query
+    type: string
+    required: true
+    label:
+      en_US: Query string
+      zh_Hans: 查询语句
+      pt_BR: Query string
+      ja_JP: クエリ文字列
+    human_description:
+      en_US: "Workspace tools"
+      zh_Hans: "Workspace tools"
+      pt_BR: "Workspace tools"
+      ja_JP: "Workspace tools"
+    llm_description: "Workspace tools"
+    form: llm
+extra:
+  python:
+    source: tools/plugin.py

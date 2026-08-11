@@ -1,0 +1,33 @@
+identity:
+  author: "tianh"
+  name: "workspace"
+  label:
+    en_US: "Local Workspace"
+    zh_Hans: "本机工作区"
+  description:
+    en_US: "Safely manage files in the configured local workspace."
+    zh_Hans: "安全管理已配置本机工作区内的文件。"
+  icon: "icon.svg"
+credentials_for_provider:
+  - name: "service_url"
+    type: "text-input"
+    required: true
+    label:
+      en_US: "Service URL"
+      zh_Hans: "服务地址"
+    placeholder:
+      en_US: "http://host.docker.internal:8787"
+      zh_Hans: "http://host.docker.internal:8787"
+  - name: "api_key"
+    type: "secret-input"
+    required: true
+    label:
+      en_US: "API Key"
+      zh_Hans: "API 密钥"
+    placeholder:
+      en_US: "Enter the workspace service API key"
+      zh_Hans: "请输入本机文件服务 API 密钥"
+tools: []
+extra:
+  python:
+    source: provider/workspace.py
