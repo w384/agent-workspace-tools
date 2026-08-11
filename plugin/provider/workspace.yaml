@@ -9,16 +9,16 @@ identity:
     zh_Hans: "安全管理已配置本机工作区内的文件。"
   icon: "icon.svg"
 credentials_for_provider:
-  - name: "service_url"
+  service_url:
     type: "text-input"
     required: true
     label:
       en_US: "Service URL"
       zh_Hans: "服务地址"
     placeholder:
-      en_US: "http://host.docker.internal:8787"
-      zh_Hans: "http://host.docker.internal:8787"
-  - name: "api_key"
+      en_US: "http://host.docker.internal:8890"
+      zh_Hans: "http://host.docker.internal:8890"
+  api_key:
     type: "secret-input"
     required: true
     label:

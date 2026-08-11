@@ -1,17 +1,17 @@
-version: 0.0.1
+version: 0.0.2
 type: plugin
 author: tianh
-name: plugin
+name: local_workspace_tools
 label:
-  en_US: plugin
-  ja_JP: plugin
-  zh_Hans: plugin
-  pt_BR: plugin
+  en_US: "Local Workspace Tools"
+  ja_JP: "Local Workspace Tools"
+  zh_Hans: "本机安全工作区"
+  pt_BR: "Local Workspace Tools"
 description:
-  en_US: Workspace tools
-  ja_JP: Workspace tools
-  zh_Hans: Workspace tools
-  pt_BR: Workspace tools
+  en_US: "Safely scan, plan, and organize files within a configured local workspace after confirmation."
+  ja_JP: "Safely scan, plan, and organize files within a configured local workspace after confirmation."
+  zh_Hans: "通过本机安全文件服务，在限定工作区内扫描、规划并确认后整理文件。"
+  pt_BR: "Safely scan, plan, and organize files within a configured local workspace after confirmation."
 icon: icon.svg
 icon_dark: icon-dark.svg
 resource:
@@ -21,7 +21,7 @@ plugins:
   tools:
     - provider/workspace.yaml
 meta:
-  version: 0.0.1
+  version: 0.0.2
   arch:
     - amd64
     - arm64
