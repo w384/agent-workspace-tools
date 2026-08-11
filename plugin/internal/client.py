@@ -125,3 +125,33 @@ class WorkspaceClient:
             "/files/content",
             params={"path": path},
         )
+
+    def create_plan(
+        self,
+        operations: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return self.request(
+            "POST",
+            "/plans",
+            json={"operations": operations},
+        )
+
+    def get_plan(self, plan_id: str) -> dict[str, Any]:
+        return self.request("GET", f"/plans/{plan_id}")
+
+    def issue_approval_token(self, plan_id: str) -> dict[str, Any]:
+        return self.request(
+            "POST",
+            f"/plans/{plan_id}/approval-token",
+        )
+
+    def execute_plan(
+        self,
+        plan_id: str,
+        approval_token: str,
+    ) -> dict[str, Any]:
+        return self.request(
+            "POST",
+            f"/plans/{plan_id}/execute",
+            json={"approval_token": approval_token},
+        )

@@ -198,7 +198,7 @@ def test_read_tool_yaml_declares_real_outputs_limits_and_registration() -> None:
     provider = yaml.safe_load(
         (PLUGIN_ROOT / "provider" / "workspace.yaml").read_text(encoding="utf-8")
     )
-    assert provider["tools"] == [
+    assert provider["tools"][:3] == [
         "tools/list_files.yaml",
         "tools/search_files.yaml",
         "tools/get_file.yaml",

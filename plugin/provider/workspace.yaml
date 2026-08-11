@@ -31,6 +31,8 @@ tools:
   - tools/list_files.yaml
   - tools/search_files.yaml
   - tools/get_file.yaml
+  - tools/create_plan.yaml
+  - tools/execute_confirmed_plan.yaml
 extra:
   python:
     source: provider/workspace.py
