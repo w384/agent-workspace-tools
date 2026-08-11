@@ -2,7 +2,7 @@
 
 这是一个仅允许在指定 Windows 工作区内操作文件的 FastAPI 服务。当前默认工作区为 `D:\AI\AgentWorkspace`。
 
-当前版本已经完成本机服务核心与 HTTP API，尚未进行 Windows 服务启动配置、Dify 插件、Dify Workflow 或 Human Input。
+当前版本已完成本机服务核心和 HTTP API，并完成 Dify 插件 0.0.4、本地 Dify Workflow 与 Human Input 人工确认闭环；Windows 服务、自启动或后台常驻配置尚未实施。
 
 ## 已实现能力
 
@@ -77,14 +77,21 @@ API Key 不写入项目文件，也不提供不安全的默认值。
 
 测试全部使用 pytest 临时目录，不会访问真实工作区 `D:\AI\AgentWorkspace`。
 
-## 当前未实施
+## 当前实现状态
+
+### 已实现并验证
+
+- Dify 插件：已完成 `本机安全工作区` 插件 0.0.4 的打包、安装和运行验证。
+- Dify Workflow：已在本机 Dify 创建并发布最小闭环。
+- Human Input：已配置 Webapp 人工确认；“确认执行”会执行计划，“取消”不会修改文件。
+- 最小闭环：`list_files → create_plan → Human Input → execute_confirmed_plan`。
+- 已验证确认、取消和一次性确认表单行为。
+
+### 尚未实施
 
 - Windows 服务、自启动或后台常驻配置。
-- Dify 插件。
-- Dify Workflow。
-- Human Input 确认节点。
-
-这些内容不属于当前批次。
+- 自然语言自动生成“操作 JSON”的 LLM/Agent 节点。
+- Workflow 导出文件纳入 Git 仓库版本管理。
 
 ## 项目资料
 
