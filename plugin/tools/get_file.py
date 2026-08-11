@@ -4,10 +4,10 @@ from typing import Any
 from dify_plugin.entities.tool import ToolInvokeMessage
 
 from internal.messages import format_file_detail
-from internal.tool_base import WorkspaceTool
+from internal import tool_base
 
 
-class GetFileTool(WorkspaceTool):
+class GetFileTool(tool_base.WorkspaceTool):
     def _invoke(
         self,
         tool_parameters: dict[str, Any],

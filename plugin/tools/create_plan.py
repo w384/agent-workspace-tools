@@ -9,14 +9,14 @@ from internal.messages import (
     INVALID_SERVICE_RESPONSE_MESSAGE,
     format_plan_confirmation,
 )
-from internal.tool_base import WorkspaceTool
+from internal import tool_base
 
 
 def _reject_non_json_constant(_value: str) -> None:
     raise ValueError("JSON 不允许非有限数值")
 
 
-class CreatePlanTool(WorkspaceTool):
+class CreatePlanTool(tool_base.WorkspaceTool):
     def _invoke(
         self,
         tool_parameters: dict[str, Any],

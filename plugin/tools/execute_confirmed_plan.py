@@ -15,8 +15,7 @@ from internal.messages import (
     format_execution_result,
     safe_service_message,
 )
-from internal.tool_base import WorkspaceTool
-
+from internal import tool_base
 
 def _normalize_plan_id(value: object) -> str:
     try:
@@ -68,7 +67,7 @@ def _safe_execution_payload(
     }
 
 
-class ExecuteConfirmedPlanTool(WorkspaceTool):
+class ExecuteConfirmedPlanTool(tool_base.WorkspaceTool):
     def _invoke(
         self,
         tool_parameters: dict[str, Any],
