@@ -30,6 +30,37 @@
 
 ---
 
+## [LRN-20260811-002] correction
+
+**Logged**: 2026-08-11
+**Priority**: high
+**Status**: resolved
+**Area**: infra
+
+### Summary
+
+用户明确授权会话内自动批准后，控制器与子代理必须统一复用批准范围，不能继续逐条弹出同类命令确认。
+
+### Details
+
+子代理继续使用带有不同命令前缀的逐条提权请求，导致测试、日志和报告更新反复要求用户确认。正确做法是把新的批准策略同步给所有后续代理，合并同类非破坏性操作，并使用已经保存的受限命令前缀。
+
+### Suggested Action
+
+本次实施中，读取、测试、项目日志和 Git 检查在既有授权范围内自动执行；删除、重启、Windows 服务安装、防火墙修改和真实工作区写入仍单独确认。
+
+### Metadata
+
+- Source: user_feedback
+- Related Files: .superpowers/sdd/2026-08-11-dify-workspace-integration/progress.md
+- Tags: approval, powershell, subagent, user-experience
+- Pattern-Key: execution.propagate-approval-policy
+- Recurrence-Count: 1
+- First-Seen: 2026-08-11
+- Last-Seen: 2026-08-11
+
+---
+
 ## [LRN-20260811-001] best_practice
 
 **Logged**: 2026-08-11
