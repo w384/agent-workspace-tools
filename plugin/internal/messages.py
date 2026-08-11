@@ -32,3 +32,38 @@ def safe_service_message(
     ):
         return fallback
     return text
+
+
+def format_file_page(result: dict[str, object]) -> str:
+    total = int(result["total"])
+    page = int(result["page"])
+    page_size = int(result["page_size"])
+    files = result["files"]
+    if not isinstance(files, list):
+        raise ValueError("文件列表响应格式无效")
+    if not files:
+        return f"共找到 {total} 个文件；第 {page} 页没有文件。"
+
+    lines = [f"共找到 {total} 个文件（第 {page} 页，每页 {page_size} 个）："]
+    for item in files:
+        if not isinstance(item, dict):
+            raise ValueError("文件列表响应格式无效")
+        lines.append(
+            f"- {item['path']}（{item['size_bytes']} 字节，"
+            f"修改时间：{item['modified_at']}）"
+        )
+    return "\n".join(lines)
+
+
+def format_file_detail(result: dict[str, object]) -> str:
+    path = result["path"]
+    size_bytes = result["size_bytes"]
+    if result.get("content_base64") is None:
+        return (
+            f"文件 {path} 超过 15MB，已仅返回元数据，"
+            "未返回文件内容。"
+        )
+    return (
+        f"已读取文件 {path}（{size_bytes} 字节），"
+        "内容已作为 Base64 返回。"
+    )

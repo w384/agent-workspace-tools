@@ -27,7 +27,10 @@ credentials_for_provider:
     placeholder:
       en_US: "Enter the workspace service API key"
       zh_Hans: "请输入本机文件服务 API 密钥"
-tools: []
+tools:
+  - tools/list_files.yaml
+  - tools/search_files.yaml
+  - tools/get_file.yaml
 extra:
   python:
     source: provider/workspace.py

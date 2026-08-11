@@ -95,3 +95,33 @@ class WorkspaceClient:
                 )
             return payload
         raise AssertionError("request retry loop exited unexpectedly")
+
+    def list_files(self, page: int, page_size: int) -> dict[str, Any]:
+        return self.request(
+            "GET",
+            "/files",
+            params={"page": page, "page_size": page_size},
+        )
+
+    def search_files(
+        self,
+        query: str,
+        page: int,
+        page_size: int,
+    ) -> dict[str, Any]:
+        return self.request(
+            "GET",
+            "/files/search",
+            params={
+                "query": query,
+                "page": page,
+                "page_size": page_size,
+            },
+        )
+
+    def get_file(self, path: str) -> dict[str, Any]:
+        return self.request(
+            "GET",
+            "/files/content",
+            params={"path": path},
+        )

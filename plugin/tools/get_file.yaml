@@ -1,0 +1,51 @@
+identity:
+  author: "tianh"
+  name: "get_file"
+  label:
+    en_US: "Get workspace file"
+    zh_Hans: "获取工作区文件"
+description:
+  human:
+    en_US: "Get file metadata and Base64 content when available."
+    zh_Hans: "获取文件元数据，并在可用时返回 Base64 内容。"
+  llm: "读取本地工作区文件；超过 15MB 时仅返回元数据。"
+parameters:
+  - name: path
+    type: string
+    required: true
+    label:
+      en_US: "Relative path"
+      zh_Hans: "相对路径"
+    human_description:
+      en_US: "File path relative to the configured workspace."
+      zh_Hans: "相对于已配置工作区的文件路径。"
+    llm_description: "文件在工作区中的相对路径。"
+    form: llm
+output_schema:
+  type: object
+  properties:
+    path:
+      type: string
+    name:
+      type: string
+    extension:
+      type: string
+    size_bytes:
+      type: integer
+    modified_at:
+      type: string
+    content_available:
+      type: boolean
+    content_base64:
+      type: [string, "null"]
+  required:
+    - path
+    - name
+    - extension
+    - size_bytes
+    - modified_at
+    - content_available
+    - content_base64
+extra:
+  python:
+    source: tools/get_file.py
