@@ -1,4 +1,5 @@
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -137,12 +138,14 @@ class WorkspaceClient:
         )
 
     def get_plan(self, plan_id: str) -> dict[str, Any]:
-        return self.request("GET", f"/plans/{plan_id}")
+        encoded_plan_id = quote(plan_id, safe="")
+        return self.request("GET", f"/plans/{encoded_plan_id}")
 
     def issue_approval_token(self, plan_id: str) -> dict[str, Any]:
+        encoded_plan_id = quote(plan_id, safe="")
         return self.request(
             "POST",
-            f"/plans/{plan_id}/approval-token",
+            f"/plans/{encoded_plan_id}/approval-token",
         )
 
     def execute_plan(
@@ -150,8 +153,9 @@ class WorkspaceClient:
         plan_id: str,
         approval_token: str,
     ) -> dict[str, Any]:
+        encoded_plan_id = quote(plan_id, safe="")
         return self.request(
             "POST",
-            f"/plans/{plan_id}/execute",
+            f"/plans/{encoded_plan_id}/execute",
             json={"approval_token": approval_token},
         )

@@ -81,25 +81,54 @@ def format_plan_confirmation(result: dict[str, object]) -> str:
     if not isinstance(confirmation, dict):
         raise ValueError("计划确认响应格式无效")
 
-    folders = confirmation.get("folders_to_create", [])
-    moves = confirmation.get("moves", [])
-    renames = confirmation.get("renames", [])
-    trash = confirmation.get("trash", [])
-    if not all(isinstance(items, list) for items in (folders, moves, renames, trash)):
+    required_sections = (
+        "folders_to_create",
+        "moves",
+        "renames",
+        "trash",
+    )
+    if set(confirmation) != set(required_sections):
         raise ValueError("计划确认响应格式无效")
 
-    folder_text = "、".join(str(item) for item in folders) or "无"
+    folders = confirmation["folders_to_create"]
+    moves = confirmation["moves"]
+    renames = confirmation["renames"]
+    trash = confirmation["trash"]
+    if not all(isinstance(items, list) for items in (folders, moves, renames, trash)):
+        raise ValueError("计划确认响应格式无效")
+    if not all(isinstance(item, str) and item for item in folders):
+        raise ValueError("计划确认响应格式无效")
+    if not all(isinstance(item, str) and item for item in trash):
+        raise ValueError("计划确认响应格式无效")
+    if not all(
+        isinstance(item, dict)
+        and isinstance(item.get("source"), str)
+        and bool(item["source"])
+        and isinstance(item.get("destination"), str)
+        and bool(item["destination"])
+        for item in moves
+    ):
+        raise ValueError("计划确认响应格式无效")
+    if not all(
+        isinstance(item, dict)
+        and isinstance(item.get("source_name"), str)
+        and bool(item["source_name"])
+        and isinstance(item.get("destination_name"), str)
+        and bool(item["destination_name"])
+        for item in renames
+    ):
+        raise ValueError("计划确认响应格式无效")
+
+    folder_text = "、".join(folders) or "无"
     move_text = "；".join(
         f"{item['source']} → {item['destination']}"
         for item in moves
-        if isinstance(item, dict)
     ) or "无"
     rename_text = "；".join(
         f"{item['source_name']} → {item['destination_name']}"
         for item in renames
-        if isinstance(item, dict)
     ) or "无"
-    trash_text = "、".join(str(item) for item in trash) or "无"
+    trash_text = "、".join(trash) or "无"
 
     return "\n".join(
         (
