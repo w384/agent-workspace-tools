@@ -1,4 +1,5 @@
 import re
+import unicodedata
 
 
 SERVICE_TIMEOUT_MESSAGE = "本机文件服务响应超时"
@@ -16,6 +17,15 @@ _WINDOWS_ROOTED_PATH = re.compile(
     r"(?<![\\\w])\\(?!\\)[^\\\s]+(?:\\[^\\\s]+)+"
 )
 _POSIX_ABSOLUTE_PATH = re.compile(r"(?<![:\w])/(?:[^\s/]+/)*[^\s/]+")
+
+
+def _is_single_line_confirmation_value(value: object) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    return all(
+        unicodedata.category(character) not in {"Cc", "Cf", "Zl", "Zp"}
+        for character in value
+    )
 
 
 def safe_service_message(
@@ -77,6 +87,9 @@ def format_file_detail(result: dict[str, object]) -> str:
 
 
 def format_plan_confirmation(result: dict[str, object]) -> str:
+    if not _is_single_line_confirmation_value(result.get("plan_id")):
+        raise ValueError("计划确认响应格式无效")
+
     confirmation = result["confirmation"]
     if not isinstance(confirmation, dict):
         raise ValueError("计划确认响应格式无效")
@@ -96,25 +109,23 @@ def format_plan_confirmation(result: dict[str, object]) -> str:
     trash = confirmation["trash"]
     if not all(isinstance(items, list) for items in (folders, moves, renames, trash)):
         raise ValueError("计划确认响应格式无效")
-    if not all(isinstance(item, str) and item for item in folders):
+    if not all(_is_single_line_confirmation_value(item) for item in folders):
         raise ValueError("计划确认响应格式无效")
-    if not all(isinstance(item, str) and item for item in trash):
+    if not all(_is_single_line_confirmation_value(item) for item in trash):
         raise ValueError("计划确认响应格式无效")
     if not all(
         isinstance(item, dict)
-        and isinstance(item.get("source"), str)
-        and bool(item["source"])
-        and isinstance(item.get("destination"), str)
-        and bool(item["destination"])
+        and set(item) == {"source", "destination"}
+        and _is_single_line_confirmation_value(item["source"])
+        and _is_single_line_confirmation_value(item["destination"])
         for item in moves
     ):
         raise ValueError("计划确认响应格式无效")
     if not all(
         isinstance(item, dict)
-        and isinstance(item.get("source_name"), str)
-        and bool(item["source_name"])
-        and isinstance(item.get("destination_name"), str)
-        and bool(item["destination_name"])
+        and set(item) == {"source_name", "destination_name"}
+        and _is_single_line_confirmation_value(item["source_name"])
+        and _is_single_line_confirmation_value(item["destination_name"])
         for item in renames
     ):
         raise ValueError("计划确认响应格式无效")
