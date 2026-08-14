@@ -19,6 +19,84 @@
 
 ---
 
+## [ERR-20260813-002] restore_snapshot_used_public_path_resolver
+
+**Logged**: 2026-08-13
+**Priority**: high
+**Status**: resolved
+**Area**: backend
+
+### Summary
+
+为所有计划增加源文件指纹时，恢复计划的合法 `.trash` 源被面向公共工作区的路径解析器拒绝。
+
+### Error
+
+```text
+ProtectedManagementPathError: 不能访问服务内部管理目录
+```
+
+### Context
+
+- 普通计划必须禁止 `.trash` 与 `.file-manager`，但恢复计划的受信 undo action 必须读取 `.trash/<operation_id>/...`。
+- 初次兼容修复让 restore 保存空快照，随后完整修复又错误复用了公共路径解析器。
+- scoped restore 回归准确暴露了该边界冲突。
+
+### Suggested Fix
+
+不要全局放宽管理目录。恢复源只能使用专用解析：规范化后的绝对路径必须仍位于当前工作区 `.trash` 根内；普通计划继续使用公共工作区解析器。
+
+### Metadata
+
+- Reproducible: yes
+- Related Files: service/app/plans.py, service/app/restore.py, service/tests/test_restore.py
+
+### Resolution
+
+- **Resolved**: 2026-08-13
+- **Notes**: 源快照函数新增仅供 restore 使用的受控 `.trash` 解析分支；plans/execution/restore scoped 17 passed，主项目 service 111 passed，plugin 103 passed，diff check 通过。
+
+---
+
+## [ERR-20260813-001] mutable_plan_type_integrity_bypass
+
+**Logged**: 2026-08-13
+**Priority**: critical
+**Status**: resolved
+**Area**: backend
+
+### Summary
+
+不能依据计划文件内可变的 `plan_type` 决定是否执行完整性校验。
+
+### Error
+
+```text
+普通计划同时被改写为 plan_type=restore 和新目标路径后，原确认令牌仍可执行篡改后的移动。
+```
+
+### Context
+
+- 首版 `plan_hash` 只覆盖 `plan_id + operations`，并对 `plan_type=restore` 跳过校验。
+- 只读验证子智能体通过临时工作区实际复现了业务文件写入，不是静态推断。
+- 该分支可在令牌消费前绕过确认时看到的计划内容。
+
+### Suggested Fix
+
+所有可写计划统一校验；摘要至少绑定计划类型、关联操作编号和规范化操作。恢复计划也必须生成摘要。跨服务 Gate 2 还需由 BFF 保存并回传受信 `expected_plan_hash`，不能只依赖与载荷同存的无密钥摘要。
+
+### Metadata
+
+- Reproducible: yes
+- Related Files: service/app/plans.py, service/app/restore.py, service/tests/test_execution.py
+
+### Resolution
+
+- **Resolved**: 2026-08-13
+- **Notes**: 已新增绕过回归测试；常规与恢复计划统一计算和校验包含 plan_type、operation_id、operations 的摘要。主项目服务全量 76 passed，插件全量 97 passed，diff check 通过。
+
+---
+
 ## [ERR-20260811-002] local_dify_preflight_assumptions
 
 **Logged**: 2026-08-11

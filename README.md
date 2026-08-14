@@ -2,7 +2,7 @@
 
 这是一个仅允许在指定 Windows 工作区内操作文件的 FastAPI 服务。当前默认工作区为 `D:\AI\AgentWorkspace`。
 
-当前版本已完成本机服务核心和 HTTP API，并完成 Dify 插件 0.0.4、本地 Dify Workflow 与 Human Input 人工确认闭环；Windows 服务、自启动或后台常驻配置尚未实施。
+当前版本已完成本机服务核心和 HTTP API，并完成 Dify 插件 0.0.6、本地 Dify Workflow 与 Human Input 人工确认闭环；Windows 登录后自动启动使用当前用户级计划任务，详见 `docs/windows-auto-start.md`。
 
 ## 已实现能力
 
@@ -57,15 +57,15 @@ API Key 不写入项目文件，也不提供不安全的默认值。
 
 1. 调用 `POST /plans` 创建计划并展示确认摘要。
 2. 用户确认后，调用 `POST /plans/{plan_id}/approval-token` 获取一次性令牌。
-3. 立即将令牌提交给 `POST /plans/{plan_id}/execute`。
+3. 将创建计划响应中的 `plan_hash` 与一次性令牌共同提交给 `POST /plans/{plan_id}/execute`；不得在确认后重新查询或重算该值。
 
 恢复操作：
 
 1. 调用 `POST /operations/{operation_id}/restore-plans` 创建恢复计划。
 2. 用户确认后，为恢复计划签发一次性令牌。
-3. 将令牌提交给 `POST /plans/{restore_plan_id}/restore`。
+3. 将恢复计划响应中的 `plan_hash` 与令牌共同提交给 `POST /plans/{restore_plan_id}/restore`。
 
-明文令牌只在签发响应中出现一次；磁盘计划文件只保存 SHA-256 哈希，消费后哈希会被移除。
+明文令牌只在签发响应中出现一次；磁盘计划文件只保存令牌的 SHA-256 哈希，消费后会被移除。计划本身另有 `plan_hash`；调用方必须独立保存确认时的值，执行器会在消费令牌和写文件前比较该值与当前计划重算结果。当前兼容执行器还会为所有源文件保存流式 SHA-256 快照、将快照绑定到 `plan_hash`，并在消费令牌前重算；确认后同路径内容发生变化时拒绝执行且保留令牌。
 
 ## 验证
 
@@ -81,17 +81,17 @@ API Key 不写入项目文件，也不提供不安全的默认值。
 
 ### 已实现并验证
 
-- Dify 插件：已完成 `本机安全工作区` 插件 0.0.4 的打包、安装和运行验证。
+- Dify 插件：已完成 `本机安全工作区` 插件 0.0.6 的打包、安装和运行验证。
 - Dify Workflow：已在本机 Dify 创建并发布最小闭环。
 - Human Input：已配置 Webapp 人工确认；“确认执行”会执行计划，“取消”不会修改文件。
-- 最小闭环：`list_files → create_plan → Human Input → execute_confirmed_plan`。
+- 自然语言闭环：`request → list_files → LLM → create_plan → Human Input → execute_confirmed_plan`。
+- LLM：已配置为输出候选 `operations_json`；当前使用 `qwen3.5:9b`，关闭思考模式并限制输出为纯 JSON 数组。
 - 已验证确认、取消和一次性确认表单行为。
+- 当前源码新增的独立 `plan_hash` 执行契约尚未打包、安装或在 Dify 页面重新绑定；已安装 0.0.6 与旧 Workflow 仅作为历史运行证据。
 
 ### 尚未实施
 
-- Windows 服务、自启动或后台常驻配置。
-- 自然语言自动生成“操作 JSON”的 LLM/Agent 节点。
-- Workflow 导出文件纳入 Git 仓库版本管理。
+- Windows Service 形式的系统级常驻配置；当前已采用用户登录触发的计划任务自动启动。
 
 ## 项目资料
 

@@ -1,0 +1,28 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0 -- D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe
+rootdir: D:\AI\Codex\Projects\dify-agent-workspace-tools
+plugins: anyio-4.14.2
+collecting ... collected 20 items
+
+control_plane/tests/test_finance_demo_rag_bridge.py::test_finance_demo_rag_port_parses_manifest_declared_pdf_docx_and_matches_rule PASSED [  5%]
+control_plane/tests/test_finance_demo_rag_bridge.py::test_finance_demo_rag_port_is_not_called_when_bff_denies_access PASSED [ 10%]
+control_plane/tests/test_finance_demo_rag_bridge.py::test_assessment_api_returns_real_finance_bridge_evidence_and_audit_fields PASSED [ 15%]
+control_plane/tests/test_finance_demo_rag_bridge.py::test_assessment_api_fails_closed_when_rule_version_fingerprint_mismatches PASSED [ 20%]
+control_plane/tests/test_finance_demo_rag_bridge.py::test_assessment_api_fails_closed_when_asset_version_fingerprint_mismatches PASSED [ 25%]
+control_plane/tests/test_finance_demo_rag_bridge.py::test_assessment_api_fails_closed_for_source_not_declared_by_import_manifest PASSED [ 30%]
+control_plane/tests/test_finance_demo_rag_bridge.py::test_assessment_api_returns_possible_when_authorized_materials_are_incomplete PASSED [ 35%]
+control_plane/tests/test_v2_rules_assessment.py::test_v2_rule_version_rejects_non_demo_or_manual_sources PASSED [ 40%]
+control_plane/tests/test_v2_rules_assessment.py::test_v2_assessment_uses_trusted_active_asset_version_and_audits_report PASSED [ 45%]
+control_plane/tests/test_v2_rules_assessment.py::test_v2_not_match_requires_explicit_fictional_conflict_evidence PASSED [ 50%]
+control_plane/tests/test_v2_rules_assessment.py::test_v2_assessment_deny_has_zero_rag_report_or_sensitive_audit PASSED [ 55%]
+control_plane/tests/test_v2_rules_assessment.py::test_v2_assessment_fails_closed_for_material_citation_outside_authorized_snapshot PASSED [ 60%]
+control_plane/tests/test_v2_rules_assessment.py::test_v2_assessment_fails_closed_for_rule_citation_outside_selected_version PASSED [ 65%]
+service/tests/rag/test_finance_material_matching.py::test_demo_rule_version_scores_material_match_with_versioned_refs PASSED [ 70%]
+service/tests/rag/test_finance_material_matching.py::test_denied_scope_short_circuits_before_fact_recall_and_explanation PASSED [ 75%]
+service/tests/rag/test_finance_material_matching.py::test_fact_index_scope_violations_fail_closed_before_scoring[cross tenant-tenant-other-active_version0-denied_asset_ids0] PASSED [ 80%]
+service/tests/rag/test_finance_material_matching.py::test_fact_index_scope_violations_fail_closed_before_scoring[inactive pair-tenant-demo-active_version1-denied_asset_ids1] PASSED [ 85%]
+service/tests/rag/test_finance_material_matching.py::test_fact_index_scope_violations_fail_closed_before_scoring[explicit deny-tenant-demo-active_version2-denied_asset_ids2] PASSED [ 90%]
+service/tests/test_financial_preassessment_demo_assets.py::test_financial_preassessment_demo_assets_are_fictional_and_versioned PASSED [ 95%]
+service/tests/test_financial_preassessment_demo_assets.py::test_financial_preassessment_import_manifest_declares_material_keys PASSED [100%]
+
+============================= 20 passed in 0.40s ==============================

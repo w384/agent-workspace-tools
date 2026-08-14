@@ -1,0 +1,482 @@
+app:
+  description: ''
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  icon_type: emoji
+  mode: workflow
+  name: 本机安全工作区整理
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/ollama:1.0.0@86dd6101fbd9de94e6681782700fa98c8a785c982918e6fe0ec21d507e15ba3f
+    version: null
+- current_identifier: null
+  type: package
+  value:
+    plugin_unique_identifier: tianh/local_workspace_tools:0.0.6@2943caaf8f9e3d73acc46e7ef375fa7ca9f50424fd808f1584359b525f9d0ff9
+    version: null
+kind: app
+version: 0.7.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        attachment_image_file_size_limit: 2
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        file_upload_limit: 20
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: tool
+      id: 1786457983727-source-1786458025459-target
+      source: '1786457983727'
+      sourceHandle: source
+      target: '1786458025459'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: tool
+        targetType: human-input
+      id: 1786458644702-source-1786459077038-target
+      source: '1786458644702'
+      sourceHandle: source
+      target: '1786459077038'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: human-input
+        targetType: tool
+      id: 1786459077038-confirm-1786459999369-target
+      selected: false
+      source: '1786459077038'
+      sourceHandle: confirm
+      target: '1786459999369'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: tool
+        targetType: llm
+      id: 1786458025459-source-1786593593011-target
+      source: '1786458025459'
+      sourceHandle: source
+      target: '1786593593011'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: tool
+      id: 1786593593011-source-1786458644702-target
+      source: '1786593593011'
+      sourceHandle: source
+      target: '1786458644702'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        selected: false
+        title: 用户输入
+        type: start
+        variables:
+        - default: ''
+          hint: ''
+          label: 文件整理需求
+          options: []
+          placeholder: ''
+          required: true
+          type: paragraph
+          variable: request
+      height: 108
+      id: '1786457983727'
+      position:
+        x: 0
+        y: 0
+      positionAbsolute:
+        x: 0
+        y: 0
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 0
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: 1
+          form: llm
+          human_description:
+            en_US: Page number, starting from 1.
+            ja_JP: Page number, starting from 1.
+            pt_BR: Page number, starting from 1.
+            zh_Hans: 页码，从 1 开始。
+          input_schema: null
+          label:
+            en_US: Page
+            ja_JP: Page
+            pt_BR: Page
+            zh_Hans: 页码
+          llm_description: 页码，从 1 开始。
+          max: null
+          min: 1
+          multiple: false
+          name: page
+          options: []
+          placeholder: null
+          precision: null
+          required: false
+          scope: null
+          template: null
+          type: number
+        - auto_generate: null
+          default: 10
+          form: llm
+          human_description:
+            en_US: Number of files per page, from 1 to 10.
+            ja_JP: Number of files per page, from 1 to 10.
+            pt_BR: Number of files per page, from 1 to 10.
+            zh_Hans: 每页文件数，范围为 1 到 10。
+          input_schema: null
+          label:
+            en_US: Page size
+            ja_JP: Page size
+            pt_BR: Page size
+            zh_Hans: 每页数量
+          llm_description: 每页文件数，最大为 10。
+          max: 10
+          min: 1
+          multiple: false
+          name: page_size
+          options: []
+          placeholder: null
+          precision: null
+          required: false
+          scope: null
+          template: null
+          type: number
+        params:
+          page: ''
+          page_size: ''
+        plugin_id: tianh/local_workspace_tools
+        plugin_unique_identifier: tianh/local_workspace_tools:0.0.4@c69b33877a0f80e4af8297a4719b1e5ad617f3961b2791390ab0a072acb3d8b6
+        provider_icon: /console/api/workspaces/current/plugin/icon?tenant_id=bff361f3-136d-47fe-a503-9e0926d9c2d6&filename=f1441c071a96f87326f5eb2ae2bfc5a570e9260e7d2b74c2ac15df4037231c64.svg
+        provider_id: tianh/local_workspace_tools/workspace
+        provider_name: tianh/local_workspace_tools/workspace
+        provider_show_name: 本机工作区
+        provider_type: builtin
+        selected: false
+        title: 列出工作区文件
+        tool_configurations: {}
+        tool_description: 分页列出已配置本地工作区中的文件。
+        tool_label: 列出工作区文件
+        tool_name: list_files
+        tool_node_version: '2'
+        tool_parameters:
+          page:
+            type: constant
+            value: 1
+          page_size:
+            type: constant
+            value: 10
+        type: tool
+      height: 51
+      id: '1786458025459'
+      position:
+        x: 342
+        y: 46.5
+      positionAbsolute:
+        x: 342
+        y: 46.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+      zIndex: 0
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: A non-empty JSON array of workspace operations.
+            ja_JP: A non-empty JSON array of workspace operations.
+            pt_BR: A non-empty JSON array of workspace operations.
+            zh_Hans: 非空的工作区操作 JSON 数组。
+          input_schema: null
+          label:
+            en_US: Operations JSON
+            ja_JP: Operations JSON
+            pt_BR: Operations JSON
+            zh_Hans: 操作 JSON
+          llm_description: 非空 JSON 数组；仅创建计划，不执行操作。
+          max: null
+          min: null
+          multiple: false
+          name: operations_json
+          options: []
+          placeholder: null
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        params:
+          operations_json: ''
+        plugin_id: tianh/local_workspace_tools
+        plugin_unique_identifier: tianh/local_workspace_tools:0.0.4@c69b33877a0f80e4af8297a4719b1e5ad617f3961b2791390ab0a072acb3d8b6
+        provider_icon: /console/api/workspaces/current/plugin/icon?tenant_id=bff361f3-136d-47fe-a503-9e0926d9c2d6&filename=f1441c071a96f87326f5eb2ae2bfc5a570e9260e7d2b74c2ac15df4037231c64.svg
+        provider_id: tianh/local_workspace_tools/workspace
+        provider_name: tianh/local_workspace_tools/workspace
+        provider_show_name: 本机工作区
+        provider_type: builtin
+        selected: false
+        title: 创建工作区计划
+        tool_configurations: {}
+        tool_description: 校验操作并创建等待人工确认的工作区计划。
+        tool_label: 创建工作区计划
+        tool_name: create_plan
+        tool_node_version: '2'
+        tool_parameters:
+          operations_json:
+            type: mixed
+            value: '{{#1786593593011.text#}}'
+        type: tool
+      height: 51
+      id: '1786458644702'
+      position:
+        x: 1024
+        y: 69.5
+      positionAbsolute:
+        x: 1024
+        y: 69.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+      zIndex: 0
+    - data:
+        delivery_methods:
+        - enabled: true
+          id: 709db8cb-fc14-4456-bc82-6fa9dcf0fa74
+          type: webapp
+        form_content: '请确认以下文件整理计划：
+
+          {{#1786458644702.confirmation_text#}}'
+        inputs: []
+        selected: false
+        timeout: 1
+        timeout_unit: hour
+        title: 人工介入
+        type: human-input
+        user_actions:
+        - button_style: default
+          id: confirm
+          title: 确认执行
+        - button_style: default
+          id: cancel
+          title: 取消
+      height: 188
+      id: '1786459077038'
+      position:
+        x: 1365
+        y: 9.5
+      positionAbsolute:
+        x: 1365
+        y: 9.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+      zIndex: 0
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: The identifier returned by create_plan.
+            ja_JP: The identifier returned by create_plan.
+            pt_BR: The identifier returned by create_plan.
+            zh_Hans: create_plan 返回的计划编号。
+          input_schema: null
+          label:
+            en_US: Plan ID
+            ja_JP: Plan ID
+            pt_BR: Plan ID
+            zh_Hans: 计划编号
+          llm_description: 等待人工确认的计划编号。
+          max: null
+          min: null
+          multiple: false
+          name: plan_id
+          options: []
+          placeholder: null
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        params:
+          plan_id: ''
+        plugin_id: tianh/local_workspace_tools
+        plugin_unique_identifier: tianh/local_workspace_tools:0.0.4@c69b33877a0f80e4af8297a4719b1e5ad617f3961b2791390ab0a072acb3d8b6
+        provider_icon: /console/api/workspaces/current/plugin/icon?tenant_id=bff361f3-136d-47fe-a503-9e0926d9c2d6&filename=f1441c071a96f87326f5eb2ae2bfc5a570e9260e7d2b74c2ac15df4037231c64.svg
+        provider_id: tianh/local_workspace_tools/workspace
+        provider_name: tianh/local_workspace_tools/workspace
+        provider_show_name: 本机工作区
+        provider_type: builtin
+        selected: false
+        title: 执行已确认计划
+        tool_configurations: {}
+        tool_description: 为已经人工确认的计划签发一次性令牌并执行。
+        tool_label: 执行已确认计划
+        tool_name: execute_confirmed_plan
+        tool_node_version: '2'
+        tool_parameters:
+          plan_id:
+            type: mixed
+            value: '{{#1786458644702.plan_id#}}'
+        type: tool
+      height: 51
+      id: '1786459999369'
+      position:
+        x: 1706
+        y: 109.33333333333333
+      positionAbsolute:
+        x: 1706
+        y: 109.33333333333333
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+      zIndex: 0
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            num_predict: 2000
+            temperature: 0
+            think: false
+          mode: chat
+          name: qwen3.5:9b
+          provider: langgenius/ollama/ollama
+        prompt_template:
+        - id: db381a7d-7a59-49f0-b435-c10704541e6e
+          role: system
+          text: "你是受限工作区的文件整理规划器。\n\n你的任务只是根据用户需求和当前可见文件生成候选操作 JSON，不能执行文件操作。\n\n\
+            必须遵守：\n1. 只能使用“当前可见文件”中真实存在的相对路径。\n2. 只允许以下操作：\n{\"action\":\"create_folder\"\
+            ,\"destination\":\"目标目录\"}\n{\"action\":\"move_rename\",\"source\":\"\
+            现有文件路径\",\"destination\":\"目标文件路径\"}\n{\"action\":\"trash\",\"source\"\
+            :\"现有文件路径\"}\n3. 最多操作 10 个文件； create_folder 不计入文件数量。\n4. 所有路径必须是工作区相对路径，使用正斜杠\
+            \ /。\n5. 禁止绝对路径、..、.trash、.file-manager。\n6. 不得覆盖已存在的文件或目录。\n7. 不得猜测当前列表中不存在的源文件。\n\
+            8. 用户没有明确要求删除时，不得生成 trash。\n9. 如果需要目标目录且目录尚不存在，应先生成 create_folder。\n10.\
+            \ 只输出 JSON 数组，不输出 Markdown、代码围栏、解释、标题或其他文字。\n11. 当用户明确要求创建目录、移动、重命名或删除时，必须输出至少一个操作。\n\
+            12. 只有当用户需求本身不包含任何文件操作，或无法基于当前可见文件形成安全计划时，才输出空数组 []。\n\n输出示例：\n[\n  {\n\
+            \    \"action\": \"create_folder\",\n    \"destination\": \"organized\"\
+            \n  },\n  {\n    \"action\": \"move_rename\",\n    \"source\": \"incoming/report.txt\"\
+            ,\n    \"destination\": \"organized/report.txt\"\n  }\n]"
+        - id: f0f5acdd-6e67-4a7f-9cc6-5acfde81ea51
+          role: user
+          text: '用户整理需求：{{#1786457983727.request#}}
+
+
+            当前用户可见文件：{{#1786458025459.text#}}
+
+
+            请生成符合系统规则的操作 JSON 数组。
+
+
+            /no_think'
+        selected: true
+        title: 生成文件整理计划
+        type: llm
+        vision:
+          enabled: false
+      height: 87
+      id: '1786593593011'
+      position:
+        x: 694.0101525584636
+        y: 37.41841887010781
+      positionAbsolute:
+        x: 694.0101525584636
+        y: 37.41841887010781
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+      zIndex: 0
+    viewport:
+      x: -123.56995258156667
+      y: 301.04022881710387
+      zoom: 0.9899494800279817
+  rag_pipeline_variables: []

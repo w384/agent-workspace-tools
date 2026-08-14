@@ -1,0 +1,10 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0 -- D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe
+rootdir: D:\AI\Codex\Projects\dify-agent-workspace-tools
+plugins: anyio-4.14.2
+collecting ... collected 2 items
+
+service/tests/test_financial_preassessment_demo_assets.py::test_financial_preassessment_demo_assets_are_fictional_and_versioned PASSED [ 50%]
+service/tests/test_financial_preassessment_demo_assets.py::test_financial_preassessment_import_manifest_declares_material_keys PASSED [100%]
+
+============================== 2 passed in 0.02s ==============================

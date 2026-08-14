@@ -30,6 +30,37 @@
 
 ---
 
+## [LRN-20260813-001] correction
+
+**Logged**: 2026-08-13
+**Priority**: high
+**Status**: resolved
+**Area**: tests
+
+### Summary
+
+执行总负责可以创建子智能体协助验证，但不得让其实现与中台控制面或 RAG 后台重叠的功能。
+
+### Details
+
+用户补充授权：主线程继续承担安全文件执行、共同契约和集成；新建子智能体仅用于只读测试、代码审查或证据核验。中台控制面与 RAG 后台已有固定任务和模块所有权，验证子智能体不得修改或复制这些功能。
+
+### Suggested Action
+
+需要独立证据时可派发边界明确的只读审查，并指定文件范围、禁止写入和禁止跨域实现；功能开发仍由既定三个执行端口按所有权完成。
+
+### Metadata
+
+- Source: user_feedback
+- Related Files: docs/contracts/frozen-v1-integration-contract.md
+- Tags: subagent, validation, ownership, integration
+- Pattern-Key: execution.validation-subagents-only
+- Recurrence-Count: 1
+- First-Seen: 2026-08-13
+- Last-Seen: 2026-08-13
+
+---
+
 ## [LRN-20260811-002] correction
 
 **Logged**: 2026-08-11
