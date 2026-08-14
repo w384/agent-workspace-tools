@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import Generator
 from typing import Any
 
@@ -31,7 +32,14 @@ class CreatePlanTool(tool_base.WorkspaceTool):
         if not isinstance(operations, list) or not operations:
             raise ValueError("操作列表必须是非空 JSON 数组")
 
-        result = self._workspace_client().create_plan(operations)
+        result = self._workspace_client().create_plan(
+            operations,
+            user_id=getattr(
+                getattr(self, "runtime", None),
+                "user_id",
+                None,
+            ),
+        )
         pending_error: WorkspaceServiceError | None = None
         payload: dict[str, Any] = {}
         confirmation_text = ""
@@ -40,6 +48,12 @@ class CreatePlanTool(tool_base.WorkspaceTool):
                 not isinstance(result, dict)
                 or not isinstance(result.get("plan_id"), str)
                 or not result["plan_id"]
+                or not isinstance(result.get("plan_hash"), str)
+                or re.fullmatch(
+                    r"sha256:[0-9a-f]{64}",
+                    result["plan_hash"],
+                )
+                is None
                 or result.get("status") != "pending_confirmation"
                 or type(result.get("file_count")) is not int
                 or result["file_count"] < 0
@@ -49,6 +63,7 @@ class CreatePlanTool(tool_base.WorkspaceTool):
             confirmation_json = result["confirmation"]
             payload = {
                 "plan_id": result["plan_id"],
+                "plan_hash": result["plan_hash"],
                 "status": result["status"],
                 "file_count": result["file_count"],
                 "confirmation_text": confirmation_text,

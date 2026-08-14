@@ -1,0 +1,45 @@
+identity:
+  author: "tianh"
+  name: "upload_file"
+  label:
+    en_US: "Upload workspace file"
+    zh_Hans: "上传工作区文件"
+description:
+  human:
+    en_US: "Upload a file after Human Input confirmation. Existing files are never overwritten."
+    zh_Hans: "仅在 Human Input 确认后上传文件，绝不覆盖已有文件。"
+  llm: "Upload a confirmed file to the configured workspace; never use this tool before Human Input confirmation."
+parameters:
+  - name: file
+    type: file
+    required: true
+    label:
+      en_US: "File"
+      zh_Hans: "文件"
+    human_description:
+      en_US: "The file confirmed by the user."
+      zh_Hans: "用户已确认要上传的文件。"
+    llm_description: "The file confirmed by Human Input."
+    form: form
+  - name: directory
+    type: string
+    required: false
+    label:
+      en_US: "Target directory"
+      zh_Hans: "目标目录"
+    human_description:
+      en_US: "Relative directory inside the configured workspace."
+      zh_Hans: "限定工作区内的相对目标目录。"
+    llm_description: "Relative target directory; never an absolute path."
+    form: form
+output_schema:
+  type: object
+  properties:
+    path:
+      type: string
+    size_bytes:
+      type: integer
+  required: [path, size_bytes]
+extra:
+  python:
+    source: tools/upload_file.py

@@ -1,4 +1,5 @@
 from collections.abc import Generator
+import re
 from typing import Any
 from uuid import UUID
 
@@ -22,6 +23,13 @@ def _normalize_plan_id(value: object) -> str:
         return str(UUID(str(value).strip()))
     except (AttributeError, TypeError, ValueError):
         raise ValueError("计划编号无效") from None
+
+
+def _normalize_plan_hash(value: object) -> str:
+    normalized = str(value).strip().lower()
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", normalized):
+        raise ValueError("计划摘要无效")
+    return normalized
 
 
 def _invalid_response_error() -> WorkspaceServiceError:
@@ -73,6 +81,9 @@ class ExecuteConfirmedPlanTool(tool_base.WorkspaceTool):
         tool_parameters: dict[str, Any],
     ) -> Generator[ToolInvokeMessage]:
         plan_id = _normalize_plan_id(tool_parameters.get("plan_id", ""))
+        plan_hash = _normalize_plan_hash(
+            tool_parameters.get("plan_hash", "")
+        )
 
         client = self._workspace_client()
         token_result: object = {}
@@ -99,7 +110,16 @@ class ExecuteConfirmedPlanTool(tool_base.WorkspaceTool):
 
             if pending_error is None:
                 try:
-                    result = client.execute_plan(plan_id, approval_token)
+                    result = client.execute_plan(
+                        plan_id,
+                        approval_token,
+                        plan_hash=plan_hash,
+                        user_id=getattr(
+                            getattr(self, "runtime", None),
+                            "user_id",
+                            None,
+                        ),
+                    )
                 except WorkspaceTimeoutError:
                     try:
                         result = client.get_plan(plan_id)

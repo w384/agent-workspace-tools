@@ -127,14 +127,41 @@ class WorkspaceClient:
             params={"path": path},
         )
 
+    def upload_file(
+        self,
+        *,
+        directory: str,
+        file_name: str,
+        content: bytes,
+        mime_type: str,
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        params = {"user_id": user_id} if user_id else None
+        return self.request(
+            "POST",
+            "/files/upload",
+            params=params,
+            data={"directory": directory},
+            files={
+                "file": (file_name, content, mime_type),
+            },
+        )
+
     def create_plan(
         self,
         operations: list[dict[str, Any]],
+        *,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
+        request_options: dict[str, Any] = {
+            "json": {"operations": operations},
+        }
+        if user_id:
+            request_options["params"] = {"user_id": user_id}
         return self.request(
             "POST",
             "/plans",
-            json={"operations": operations},
+            **request_options,
         )
 
     def get_plan(self, plan_id: str) -> dict[str, Any]:
@@ -152,10 +179,21 @@ class WorkspaceClient:
         self,
         plan_id: str,
         approval_token: str,
+        *,
+        plan_hash: str,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
         encoded_plan_id = quote(plan_id, safe="")
+        request_options: dict[str, Any] = {
+            "json": {
+                "approval_token": approval_token,
+                "plan_hash": plan_hash,
+            },
+        }
+        if user_id:
+            request_options["params"] = {"user_id": user_id}
         return self.request(
             "POST",
             f"/plans/{encoded_plan_id}/execute",
-            json={"approval_token": approval_token},
+            **request_options,
         )

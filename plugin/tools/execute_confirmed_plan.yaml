@@ -21,6 +21,17 @@ parameters:
       zh_Hans: "create_plan 返回的计划编号。"
     llm_description: "等待人工确认的计划编号。"
     form: llm
+  - name: plan_hash
+    type: string
+    required: true
+    label:
+      en_US: "Plan hash"
+      zh_Hans: "计划摘要"
+    human_description:
+      en_US: "The plan hash returned by create_plan and shown for confirmation."
+      zh_Hans: "create_plan 返回并随确认内容保存的计划摘要。"
+    llm_description: "create_plan 返回的 plan_hash；必须原样传递。"
+    form: llm
 output_schema:
   type: object
   properties:

@@ -13,6 +13,7 @@ from dify_plugin.core.utils.class_loader import (
         ("list_files", "ListFilesTool"),
         ("search_files", "SearchFilesTool"),
         ("get_file", "GetFileTool"),
+        ("upload_file", "UploadFileTool"),
         ("create_plan", "CreatePlanTool"),
         (
             "execute_confirmed_plan",

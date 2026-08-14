@@ -26,6 +26,8 @@ output_schema:
   properties:
     plan_id:
       type: string
+    plan_hash:
+      type: string
     status:
       type: string
     file_count:
@@ -64,7 +66,7 @@ output_schema:
           items:
             type: string
       required: [folders_to_create, moves, renames, trash]
-  required: [plan_id, status, file_count, confirmation_text, confirmation_json]
+  required: [plan_id, plan_hash, status, file_count, confirmation_text, confirmation_json]
 extra:
   python:
     source: tools/create_plan.py

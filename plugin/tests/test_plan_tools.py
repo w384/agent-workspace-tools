@@ -2,6 +2,7 @@ import importlib
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -17,6 +18,7 @@ from internal.client import (
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 PLAN_ID = "123e4567-e89b-12d3-a456-426614174000"
+PLAN_HASH = "sha256:" + "a" * 64
 
 
 class RecordingWorkspaceClient(WorkspaceClient):
@@ -49,8 +51,15 @@ class RecordingPlanClient:
         self.token_response = token_response
         self.execute_result = execute_result or {}
         self.status_result = status_result or {}
+        self.user_ids: list[str | None] = []
 
-    def create_plan(self, operations: list[dict[str, Any]]) -> dict[str, Any]:
+    def create_plan(
+        self,
+        operations: list[dict[str, Any]],
+        *,
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        self.user_ids.append(user_id)
         self.calls.append(("create_plan", (operations,)))
         return self.create_result
 
@@ -64,8 +73,14 @@ class RecordingPlanClient:
         self,
         plan_id: str,
         approval_token: str,
+        *,
+        plan_hash: str,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
-        self.calls.append(("execute_plan", (plan_id, approval_token)))
+        self.user_ids.append(user_id)
+        self.calls.append(
+            ("execute_plan", (plan_id, approval_token, plan_hash))
+        )
         if isinstance(self.execute_result, Exception):
             raise self.execute_result
         return self.execute_result
@@ -122,6 +137,7 @@ def _variables(messages: list[Any]) -> dict[str, Any]:
 def _plan_result() -> dict[str, Any]:
     return {
         "plan_id": PLAN_ID,
+        "plan_hash": PLAN_HASH,
         "status": "pending_confirmation",
         "file_count": 3,
         "confirmation": {
@@ -157,7 +173,7 @@ def test_client_plan_wrappers_use_expected_endpoints_and_payloads() -> None:
     client.create_plan(operations)
     client.get_plan(PLAN_ID)
     client.issue_approval_token(PLAN_ID)
-    client.execute_plan(PLAN_ID, "token")
+    client.execute_plan(PLAN_ID, "token", plan_hash=PLAN_HASH)
 
     assert client.calls == [
         ("POST", "/plans", {"json": {"operations": operations}}),
@@ -166,7 +182,75 @@ def test_client_plan_wrappers_use_expected_endpoints_and_payloads() -> None:
         (
             "POST",
             f"/plans/{PLAN_ID}/execute",
-            {"json": {"approval_token": "token"}},
+            {
+                "json": {
+                    "approval_token": "token",
+                    "plan_hash": PLAN_HASH,
+                }
+            },
+        ),
+    ]
+
+
+def test_client_execute_sends_independent_confirmed_plan_hash() -> None:
+    client = RecordingWorkspaceClient([{"status": "completed"}])
+
+    client.execute_plan(
+        PLAN_ID,
+        "token",
+        plan_hash=PLAN_HASH,
+    )
+
+    assert client.calls == [
+        (
+            "POST",
+            f"/plans/{PLAN_ID}/execute",
+            {
+                "json": {
+                    "approval_token": "token",
+                    "plan_hash": PLAN_HASH,
+                }
+            },
+        )
+    ]
+
+
+def test_client_plan_wrappers_pass_runtime_user_id() -> None:
+    client = RecordingWorkspaceClient(
+        [
+            {"plan_id": PLAN_ID},
+            {"status": "completed"},
+        ]
+    )
+    operations = [{"action": "create_folder", "destination": "organized"}]
+
+    client.create_plan(operations, user_id="member-user")
+    client.execute_plan(
+        PLAN_ID,
+        "token",
+        plan_hash=PLAN_HASH,
+        user_id="member-user",
+    )
+
+    assert client.calls == [
+        (
+            "POST",
+            "/plans",
+            {
+                "json": {"operations": operations},
+                "params": {"user_id": "member-user"},
+            },
+        ),
+        (
+            "POST",
+            f"/plans/{PLAN_ID}/execute",
+            {
+                "json": {
+                    "approval_token": "token",
+                    "plan_hash": PLAN_HASH,
+                },
+                "params": {"user_id": "member-user"},
+            },
         ),
     ]
 
@@ -178,7 +262,11 @@ def test_client_percent_encodes_every_dynamic_plan_path_segment() -> None:
 
     client.get_plan(unsafe_segment)
     client.issue_approval_token(unsafe_segment)
-    client.execute_plan(unsafe_segment, "token")
+    client.execute_plan(
+        unsafe_segment,
+        "token",
+        plan_hash=PLAN_HASH,
+    )
 
     assert client.calls == [
         ("GET", f"/plans/{encoded_segment}", {}),
@@ -186,7 +274,12 @@ def test_client_percent_encodes_every_dynamic_plan_path_segment() -> None:
         (
             "POST",
             f"/plans/{encoded_segment}/execute",
-            {"json": {"approval_token": "token"}},
+            {
+                "json": {
+                    "approval_token": "token",
+                    "plan_hash": PLAN_HASH,
+                }
+            },
         ),
     ]
 
@@ -237,6 +330,7 @@ def test_create_plan_emits_exact_six_item_confirmation_and_real_outputs() -> Non
     )
     expected_payload = {
         "plan_id": PLAN_ID,
+        "plan_hash": PLAN_HASH,
         "status": "pending_confirmation",
         "file_count": 3,
         "confirmation_text": expected_text,
@@ -255,6 +349,136 @@ def test_create_plan_emits_exact_six_item_confirmation_and_real_outputs() -> Non
     assert len(expected_text.splitlines()) == 6
     assert _json(messages) == expected_payload
     assert _variables(messages) == expected_payload
+
+
+def test_create_plan_exposes_confirmed_plan_hash() -> None:
+    result = _plan_result()
+    result["plan_hash"] = PLAN_HASH
+    tool = _tool(
+        "create_plan",
+        "CreatePlanTool",
+        RecordingPlanClient(create_result=result),
+    )
+
+    messages = list(
+        tool._invoke(
+            {
+                "operations_json": (
+                    '[{"action":"create_folder",'
+                    '"destination":"organized"}]'
+                )
+            }
+        )
+    )
+
+    assert _json(messages)["plan_hash"] == PLAN_HASH
+    assert _variables(messages)["plan_hash"] == PLAN_HASH
+
+
+@pytest.mark.parametrize(
+    "invalid_plan_hash",
+    [
+        "not-a-digest",
+        "sha256:1234",
+        "sha512:" + "a" * 64,
+    ],
+)
+def test_create_plan_rejects_invalid_plan_hash_before_human_input(
+    invalid_plan_hash: str,
+) -> None:
+    result = _plan_result()
+    result["plan_hash"] = invalid_plan_hash
+    tool = _tool(
+        "create_plan",
+        "CreatePlanTool",
+        RecordingPlanClient(create_result=result),
+    )
+
+    messages: list[Any] = []
+    with pytest.raises(WorkspaceServiceError) as caught:
+        for message in tool._invoke(
+            {
+                "operations_json": (
+                    '[{"action":"create_folder",'
+                    '"destination":"organized"}]'
+                )
+            }
+        ):
+            messages.append(message)
+
+    assert messages == []
+    assert caught.value.code == "invalid_service_response"
+
+
+def test_execute_tool_forwards_confirmed_plan_hash() -> None:
+    client = RecordingPlanClient(
+        execute_result={
+            "plan_id": PLAN_ID,
+            "status": "completed",
+            "file_count": 0,
+            "operation_id": "operation-456",
+        }
+    )
+    tool = _tool(
+        "execute_confirmed_plan",
+        "ExecuteConfirmedPlanTool",
+        client,
+    )
+
+    list(
+        tool._invoke(
+            {
+                "plan_id": PLAN_ID,
+                "plan_hash": PLAN_HASH,
+            }
+        )
+    )
+
+    assert client.calls == [
+        ("issue_approval_token", (PLAN_ID,)),
+        (
+            "execute_plan",
+            (PLAN_ID, "approval-secret-token", PLAN_HASH),
+        ),
+    ]
+
+
+def test_plan_tools_pass_runtime_user_id_to_service_client() -> None:
+    client = RecordingPlanClient(
+        create_result=_plan_result(),
+        execute_result={
+            "plan_id": PLAN_ID,
+            "status": "completed",
+            "file_count": 0,
+            "operation_id": "operation-456",
+        },
+    )
+    create_tool = _tool("create_plan", "CreatePlanTool", client)
+    execute_tool = _tool(
+        "execute_confirmed_plan",
+        "ExecuteConfirmedPlanTool",
+        client,
+    )
+    runtime = SimpleNamespace(user_id="member-user")
+    create_tool.runtime = runtime
+    execute_tool.runtime = runtime
+
+    list(
+        create_tool._invoke(
+            {
+                "operations_json": (
+                    '[{"action":"create_folder","destination":"organized"}]'
+                )
+            }
+        )
+    )
+    list(
+        execute_tool._invoke(
+            {"plan_id": PLAN_ID, "plan_hash": PLAN_HASH}
+        )
+    )
+
+    assert client.user_ids == ["member-user", "member-user"]
 
 
 def test_create_plan_confirmation_displays_none_for_all_empty_sections() -> None:
@@ -303,7 +527,12 @@ def test_execute_confirmed_plan_requests_token_then_executes_without_leaking_it(
     )
 
     messages = list(
-        tool._invoke({"plan_id": " {123E4567-E89B-12D3-A456-426614174000} "})
+        tool._invoke(
+            {
+                "plan_id": " {123E4567-E89B-12D3-A456-426614174000} ",
+                "plan_hash": PLAN_HASH,
+            }
+        )
     )
 
     expected_payload = {
@@ -314,7 +543,7 @@ def test_execute_confirmed_plan_requests_token_then_executes_without_leaking_it(
     }
     assert client.calls == [
         ("issue_approval_token", (PLAN_ID,)),
-        ("execute_plan", (PLAN_ID, token)),
+        ("execute_plan", (PLAN_ID, token, PLAN_HASH)),
     ]
     assert _json(messages) == expected_payload
     assert _variables(messages) == expected_payload
@@ -351,7 +580,11 @@ def test_execute_rejects_non_uuid_plan_ids_before_any_service_call(
     )
 
     with pytest.raises(ValueError, match="计划编号无效"):
-        list(tool._invoke({"plan_id": malicious_plan_id}))
+        list(
+            tool._invoke(
+                {"plan_id": malicious_plan_id, "plan_hash": PLAN_HASH}
+            )
+        )
 
     assert client.calls == []
 
@@ -377,11 +610,13 @@ def test_execute_timeout_returns_completed_status_after_single_status_query() ->
         client,
     )
 
-    messages = list(tool._invoke({"plan_id": PLAN_ID}))
+    messages = list(
+        tool._invoke({"plan_id": PLAN_ID, "plan_hash": PLAN_HASH})
+    )
 
     assert client.calls == [
         ("issue_approval_token", (PLAN_ID,)),
-        ("execute_plan", (PLAN_ID, token)),
+        ("execute_plan", (PLAN_ID, token, PLAN_HASH)),
         ("get_plan", (PLAN_ID,)),
     ]
     assert _json(messages)["status"] == "completed"
@@ -405,11 +640,13 @@ def test_execute_timeout_with_other_status_is_uncertain_and_never_reposts() -> N
     )
 
     with pytest.raises(Exception, match="执行状态不确定") as caught:
-        list(tool._invoke({"plan_id": PLAN_ID}))
+        list(
+            tool._invoke({"plan_id": PLAN_ID, "plan_hash": PLAN_HASH})
+        )
 
     assert client.calls == [
         ("issue_approval_token", (PLAN_ID,)),
-        ("execute_plan", (PLAN_ID, token)),
+        ("execute_plan", (PLAN_ID, token, PLAN_HASH)),
         ("get_plan", (PLAN_ID,)),
     ]
     assert token not in str(caught.value)
@@ -428,7 +665,9 @@ def test_execute_failure_removes_token_from_error_context_code_and_tool_frame() 
     )
 
     with pytest.raises(WorkspaceServiceError) as caught:
-        list(tool._invoke({"plan_id": PLAN_ID}))
+        list(
+            tool._invoke({"plan_id": PLAN_ID, "plan_hash": PLAN_HASH})
+        )
 
     assert token not in str(caught.value)
     assert token not in caught.value.code
@@ -474,7 +713,9 @@ def test_malformed_execute_response_cannot_leak_token_anywhere(
     )
 
     with pytest.raises(WorkspaceServiceError) as caught:
-        list(tool._invoke({"plan_id": PLAN_ID}))
+        list(
+            tool._invoke({"plan_id": PLAN_ID, "plan_hash": PLAN_HASH})
+        )
 
     assert caught.value.code == "invalid_service_response"
     assert token not in str(caught.value)
@@ -537,7 +778,9 @@ def test_normal_execute_response_requires_completed_typed_matching_projection(
     )
 
     with pytest.raises(WorkspaceServiceError) as caught:
-        list(tool._invoke({"plan_id": PLAN_ID}))
+        list(
+            tool._invoke({"plan_id": PLAN_ID, "plan_hash": PLAN_HASH})
+        )
 
     assert caught.value.code == "invalid_service_response"
     assert caught.value.__context__ is None
@@ -739,7 +982,9 @@ def test_malformed_token_response_never_reaches_execute_or_leaks_token(
     )
 
     with pytest.raises(WorkspaceServiceError) as caught:
-        list(tool._invoke({"plan_id": PLAN_ID}))
+        list(
+            tool._invoke({"plan_id": PLAN_ID, "plan_hash": PLAN_HASH})
+        )
 
     assert client.calls == [("issue_approval_token", (PLAN_ID,))]
     assert caught.value.code == "invalid_service_response"
@@ -766,15 +1011,17 @@ def test_plan_tool_yaml_declares_real_outputs_and_provider_registration() -> Non
     )
     assert provider["tools"] == [
         "tools/list_files.yaml",
-        "tools/search_files.yaml",
-        "tools/get_file.yaml",
-        "tools/create_plan.yaml",
+            "tools/search_files.yaml",
+            "tools/get_file.yaml",
+            "tools/upload_file.yaml",
+            "tools/create_plan.yaml",
         "tools/execute_confirmed_plan.yaml",
     ]
 
     expected_outputs = {
         "create_plan": {
             "plan_id",
+            "plan_hash",
             "status",
             "file_count",
             "confirmation_text",
@@ -796,7 +1043,11 @@ def test_plan_tool_yaml_declares_real_outputs_and_provider_registration() -> Non
         assert set(configuration["output_schema"]["properties"]) == output_names
         assert {
             parameter["name"] for parameter in configuration["parameters"]
-        } == ({"operations_json"} if tool_name == "create_plan" else {"plan_id"})
+        } == (
+            {"operations_json"}
+            if tool_name == "create_plan"
+            else {"plan_id", "plan_hash"}
+        )
 
 
 def test_plan_tools_import_from_plugin_runtime_root() -> None:
