@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>资料预评估与知识库问答 DEMO</title>
+    <link rel="stylesheet" href="/demo/style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <h1>资料预评估与知识库问答 DEMO</h1>
+        <p class="subtitle">统一演示入口：控制面负责身份、权限、报告与审计权威</p>
+      </header>
+
+      <section id="login-panel" class="card">
+        <h2>登录</h2>
+        <form id="login-form">
+          <label>
+            用户名
+            <input name="username" autocomplete="username" required />
+          </label>
+          <label>
+            密码
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit">登录</button>
+        </form>
+        <p id="login-status" class="status"></p>
+      </section>
+
+      <section id="demo-panel" class="card hidden">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="assessment">资料预评估</button>
+          <button class="tab" data-tab="qa">知识库问答</button>
+        </div>
+
+        <div id="assessment" class="tab-panel">
+          <h2>资料预评估报告展示</h2>
+          <p>确定性匹配结果 + 版本化引用 + 免责声明；不构成贷款、授信或金融产品结论。</p>
+          <form id="assessment-form">
+            <label>
+              场景 scenario
+              <input name="scenario" value="finance_profile_matching" />
+            </label>
+            <label>
+              查询主体 query_subject
+              <input name="query_subject" value="customer-demo-001" />
+            </label>
+            <label>
+              资产 ID（逗号分隔）
+              <input name="asset_ids" value="" placeholder="asset-id" />
+            </label>
+            <label>
+              规则版本 ID rule_version_id
+              <input name="rule_version_id" value="" placeholder="先创建演示规则版本" />
+            </label>
+            <button type="button" id="create-rule">创建演示规则版本</button>
+            <button type="submit">生成预评估报告</button>
+          </form>
+          <pre id="assessment-result" class="output"></pre>
+        </div>
+
+        <div id="qa" class="tab-panel hidden">
+          <h2>自然语言知识库问答</h2>
+          <p>仅对当前会话授权可见的已激活版本做检索。</p>
+          <form id="qa-form">
+            <label>
+              问题
+              <input name="question" value="项目验收要求是什么？" />
+            </label>
+            <label>
+              资产 ID
+              <input name="asset_id" value="" placeholder="asset-id" />
+            </label>
+            <button type="submit">提问</button>
+          </form>
+          <pre id="qa-result" class="output"></pre>
+        </div>
+      </section>
+    </main>
+    <script src="/demo/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,527 @@
+import hmac
+from dataclasses import asdict
+from pathlib import Path
+from typing import Mapping
+from uuid import uuid4
+
+from fastapi import Cookie, Depends, FastAPI, File, Form, Header, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from .domain import TrustedActorContext
+from .ports import FileExecutorPort, RagPort
+from .repository import ControlPlaneRepository
+from .service import (
+    ActorNotPlanCreatorError,
+    AssessmentDeniedError,
+    AssessmentFailedError,
+    ApprovalForbiddenError,
+    ApprovalNotFoundError,
+    AssetVersionNotFoundError,
+    ControlPlaneService,
+    ExecutorAclDeniedError,
+    ExecutorExecutionFailedError,
+    ExecutorResultMismatchError,
+    ExecutorUploadFailedError,
+    InvalidIndexTransitionError,
+    PlanDeniedError,
+    PlanHashMismatchError,
+    PlanNotFoundError,
+    PlanRevalidationError,
+    PlanStateError,
+    RagEnqueueFailedError,
+    RuleSourceNotAllowedError,
+    RuleVersionNotFoundError,
+    UploadDeniedError,
+    UploadTargetExistsError,
+)
+from .sessions import (
+    DemoIdentity,
+    ServerSessionStore,
+    authenticate_demo_identity,
+)
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class IndexStatusRequest(BaseModel):
+    state: str
+    failure_code: str | None = None
+
+
+class RagQueryRequest(BaseModel):
+    question: str
+    asset_id: str
+
+
+class CreatePlanRequest(BaseModel):
+    operations: list[dict[str, object]]
+    expires_at: str
+    policy_version: str | None = None
+    context_version: str | None = None
+    asset_snapshots: list[dict[str, object]] | None = None
+
+
+class ConfirmPlanRequest(BaseModel):
+    expected_plan_hash: str
+
+
+class DecideApprovalRequest(BaseModel):
+    decision: str
+    expected_plan_hash: str
+    role_ids: list[str] | None = None
+
+
+class CreateRuleSetRequest(BaseModel):
+    scenario: str
+    name: str
+    status: str
+    source_type: str
+    version_label: str
+    content_fingerprint: str
+    redacted_rule_summary: str
+
+
+class CreateAssessmentRequest(BaseModel):
+    scenario: str
+    query_subject: str
+    asset_ids: list[str]
+    rule_version_id: str
+    asset_version_ids: list[str] | None = None
+    llm_report: dict[str, object] | None = None
+
+
+class ApiError(Exception):
+    def __init__(self, status_code: int, code: str, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+
+
+def create_app(
+    *,
+    repository: ControlPlaneRepository,
+    file_executor: FileExecutorPort,
+    rag_port: RagPort,
+    demo_identities: Mapping[str, DemoIdentity],
+    internal_service_key: str,
+    approver_role_id: str,
+    disclaimer_version: str = "disclaimer-demo-v1",
+    disclaimer_text: str = "仅供资料完整度与规则匹配演示参考",
+) -> FastAPI:
+    if not internal_service_key.strip():
+        raise ValueError("internal service key must be non-empty")
+    if not approver_role_id.strip():
+        raise ValueError("approver_role_id must be non-empty")
+
+    app = FastAPI()
+    static_dir = Path(__file__).resolve().parent.parent / "static"
+    app.mount(
+        "/demo",
+        StaticFiles(directory=static_dir, html=True),
+        name="demo",
+    )
+    session_store = ServerSessionStore()
+    app.state.repository = repository
+    app.state.file_executor = file_executor
+    app.state.rag_port = rag_port
+    app.state.demo_identities = dict(demo_identities)
+    app.state.internal_service_key = internal_service_key
+    app.state.approver_role_id = approver_role_id
+    app.state.disclaimer_version = disclaimer_version
+    app.state.session_store = session_store
+    service = ControlPlaneService(
+        repository,
+        file_executor,
+        rag_port,
+        approver_role_id,
+        disclaimer_version=disclaimer_version,
+        disclaimer_text=disclaimer_text,
+    )
+    app.state.control_plane_service = service
+
+    @app.exception_handler(ApiError)
+    async def handle_api_error(_request: Request, error: ApiError) -> JSONResponse:
+        content: dict[str, object] = {
+            "error": {"code": error.code, "message": error.message}
+        }
+        if error.code == "assessment_denied":
+            content = {
+                "status": "DENIED",
+                "reason": "ACCESS_DENIED",
+                "retrieved_count": 0,
+                "llm_invoked": False,
+                "citations": [],
+                **content,
+            }
+        return JSONResponse(
+            status_code=error.status_code,
+            content=content,
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def handle_request_validation_error(
+        _request: Request, _error: RequestValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": {
+                    "code": "request_validation_error",
+                    "message": "Invalid request",
+                }
+            },
+        )
+
+    def require_actor(cp_session: str | None = Cookie(default=None)) -> TrustedActorContext:
+        actor = session_store.resolve(cp_session, _new_id())
+        if actor is None:
+            raise ApiError(401, "authentication_required", "Authentication required")
+        return actor
+
+    @app.post("/api/session/login")
+    def login(credentials: LoginRequest) -> JSONResponse:
+        identity = authenticate_demo_identity(
+            app.state.demo_identities, credentials.username, credentials.password
+        )
+        if identity is None:
+            raise ApiError(401, "invalid_credentials", "Invalid credentials")
+        bearer, actor = session_store.create(identity, _new_id())
+        response = JSONResponse(_actor_payload(actor))
+        response.set_cookie(
+            key="cp_session",
+            value=bearer,
+            httponly=True,
+            samesite="strict",
+            path="/",
+        )
+        return response
+
+    @app.get("/api/session/me")
+    def me(actor: TrustedActorContext = Depends(require_actor)) -> dict[str, object]:
+        return _actor_payload(actor)
+
+    @app.post("/api/session/logout", status_code=204)
+    def logout(cp_session: str | None = Cookie(default=None)) -> Response:
+        session_store.revoke(cp_session)
+        response = Response(status_code=204)
+        response.delete_cookie("cp_session", path="/", httponly=True, samesite="strict")
+        return response
+
+    @app.post("/api/uploads")
+    async def upload(
+        directory: str = Form(...),
+        file: UploadFile = File(...),
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        try:
+            outcome = service.upload(
+                actor=actor,
+                directory=directory,
+                file_name=file.filename or "",
+                content=await file.read(),
+            )
+        except UploadDeniedError as error:
+            raise ApiError(403, "upload_denied", "Upload is not authorized") from error
+        except ExecutorResultMismatchError as error:
+            raise ApiError(
+                502,
+                "executor_result_mismatch",
+                "Executor result does not match the authorized upload target",
+            ) from error
+        except ExecutorUploadFailedError as error:
+            raise ApiError(
+                502,
+                "executor_upload_failed",
+                "File upload failed",
+            ) from error
+        except UploadTargetExistsError as error:
+            raise ApiError(
+                409,
+                "upload_target_exists",
+                "Upload target already exists",
+            ) from error
+        except RagEnqueueFailedError as error:
+            raise ApiError(
+                502,
+                "rag_enqueue_failed",
+                "Index enqueue failed",
+            ) from error
+        return {
+            "decision": {
+                "state": outcome.decision.state.value,
+                "reason": outcome.decision.reason,
+            },
+            "asset": asdict(outcome.asset),
+            "asset_version": asdict(outcome.asset_version),
+            "audit_event_id": outcome.audit_event_id,
+        }
+
+    @app.post("/api/retrieval/query")
+    def query_retrieval(
+        request: RagQueryRequest,
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> Mapping[str, object]:
+        question = request.question.strip()
+        if not question:
+            raise ApiError(422, "question_required", "Question is required")
+        asset_id = request.asset_id.strip()
+        if not asset_id:
+            raise ApiError(422, "asset_id_required", "Asset ID is required")
+        return rag_port.query(actor, question, asset_id)
+
+    @app.post("/api/rule-sets")
+    def create_rule_set(
+        request: CreateRuleSetRequest,
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        try:
+            outcome = service.create_rule_set_with_version(
+                actor=actor,
+                scenario=request.scenario,
+                name=request.name,
+                status=request.status,
+                source_type=request.source_type,
+                version_label=request.version_label,
+                content_fingerprint=request.content_fingerprint,
+                redacted_rule_summary=request.redacted_rule_summary,
+            )
+        except RuleSourceNotAllowedError as error:
+            raise ApiError(
+                422,
+                "rule_source_not_allowed",
+                "Rule source is not allowed for the demo",
+            ) from error
+        return {
+            "rule_set": asdict(outcome.rule_set),
+            "rule_version": asdict(outcome.rule_version),
+            "audit_event_id": outcome.audit_event_id,
+        }
+
+    @app.post("/api/assessments")
+    def create_assessment(
+        request: CreateAssessmentRequest,
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        try:
+            outcome = service.create_assessment_report(
+                actor=actor,
+                scenario=request.scenario,
+                query_subject=request.query_subject,
+                asset_ids=tuple(request.asset_ids),
+                rule_version_id=request.rule_version_id,
+            )
+        except AssessmentDeniedError as error:
+            raise ApiError(
+                403,
+                "assessment_denied",
+                "Assessment is not authorized",
+            ) from error
+        except RuleVersionNotFoundError as error:
+            raise ApiError(404, "rule_version_not_found", "Rule version not found") from error
+        except AssessmentFailedError as error:
+            raise ApiError(502, "assessment_failed", "Assessment failed") from error
+        return {"report": _assessment_report_payload(outcome.report)}
+
+    @app.post("/api/plans")
+    def create_plan(
+        request: CreatePlanRequest,
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        try:
+            outcome = service.create_plan(
+                actor=actor,
+                operations=tuple(request.operations),
+                expires_at=request.expires_at,
+            )
+        except PlanDeniedError as error:
+            raise ApiError(403, "plan_denied", "Plan is not authorized") from error
+        return {
+            "decision": {
+                "state": outcome.decision.state.value,
+                "reason": outcome.decision.reason,
+            },
+            "plan": _plan_payload(outcome.plan),
+            "asset_snapshots": list(outcome.plan.asset_snapshots),
+            "impact_summary": outcome.impact_summary,
+        }
+
+    @app.post("/api/plans/{plan_id}/confirm")
+    def confirm_plan(
+        plan_id: str,
+        request: ConfirmPlanRequest,
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        if idempotency_key is None or not idempotency_key.strip():
+            raise ApiError(422, "idempotency_key_required", "Idempotency-Key is required")
+        try:
+            outcome = service.confirm_plan(
+                actor=actor,
+                plan_id=plan_id,
+                expected_plan_hash=request.expected_plan_hash,
+                idempotency_key=idempotency_key,
+            )
+        except PlanHashMismatchError as error:
+            raise ApiError(409, "plan_hash_mismatch", "Plan hash mismatch") from error
+        except ActorNotPlanCreatorError as error:
+            raise ApiError(403, "plan_confirmation_forbidden", "Plan confirmation is forbidden") from error
+        except PlanNotFoundError as error:
+            raise ApiError(404, "plan_not_found", "Plan not found") from error
+        except PlanStateError as error:
+            raise ApiError(409, "invalid_plan_state", "Invalid plan state") from error
+        except PlanRevalidationError as error:
+            status_code = 403 if error.denied else 409
+            raise ApiError(
+                status_code,
+                "plan_revalidation_failed",
+                "Plan is no longer executable",
+            ) from error
+        except ExecutorAclDeniedError as error:
+            raise ApiError(403, "executor_acl_denied", "Execution is not authorized") from error
+        except ExecutorExecutionFailedError as error:
+            raise ApiError(502, "executor_execution_failed", "Execution failed") from error
+        return _confirmation_payload(outcome)
+
+    @app.get("/api/approvals/pending")
+    def pending_approvals(
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        return {
+            "approvals": [
+                _approval_payload(approval)
+                for approval in service.list_pending_approvals(actor)
+            ]
+        }
+
+    @app.post("/api/approvals/{approval_id}/decide")
+    def decide_approval(
+        approval_id: str,
+        request: DecideApprovalRequest,
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        if idempotency_key is None or not idempotency_key.strip():
+            raise ApiError(422, "idempotency_key_required", "Idempotency-Key is required")
+        try:
+            outcome = service.decide_approval(
+                actor=actor,
+                approval_id=approval_id,
+                decision=request.decision,
+                expected_plan_hash=request.expected_plan_hash,
+                idempotency_key=idempotency_key,
+            )
+        except ApprovalForbiddenError as error:
+            raise ApiError(403, "approval_forbidden", "Approval decision is forbidden") from error
+        except ApprovalNotFoundError as error:
+            raise ApiError(404, "approval_not_found", "Approval not found") from error
+        except PlanHashMismatchError as error:
+            raise ApiError(409, "plan_hash_mismatch", "Plan hash mismatch") from error
+        except PlanStateError as error:
+            raise ApiError(409, "invalid_approval_state", "Invalid approval state") from error
+        except PlanRevalidationError as error:
+            status_code = 403 if error.denied else 409
+            raise ApiError(
+                status_code,
+                "plan_revalidation_failed",
+                "Plan is no longer executable",
+            ) from error
+        except ExecutorAclDeniedError as error:
+            raise ApiError(403, "executor_acl_denied", "Execution is not authorized") from error
+        except ExecutorExecutionFailedError as error:
+            raise ApiError(502, "executor_execution_failed", "Execution failed") from error
+        return _approval_decision_payload(outcome)
+
+    @app.post("/internal/asset-versions/{asset_version_id}/index-status")
+    def update_index_status(
+        asset_version_id: str,
+        update: IndexStatusRequest,
+        x_internal_service_key: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        if x_internal_service_key is None or not hmac.compare_digest(
+            x_internal_service_key, internal_service_key
+        ):
+            raise ApiError(
+                401,
+                "internal_service_unauthorized",
+                "Invalid internal service key",
+            )
+        try:
+            version = service.update_index_state(
+                asset_version_id=asset_version_id,
+                state=update.state,
+                failure_code=update.failure_code,
+            )
+        except InvalidIndexTransitionError as error:
+            raise ApiError(
+                409,
+                "invalid_index_transition",
+                "Invalid index transition",
+            ) from error
+        except AssetVersionNotFoundError as error:
+            raise ApiError(
+                404,
+                "asset_version_not_found",
+                "Asset version not found",
+            ) from error
+        return {"asset_version": asdict(version)}
+
+    return app
+
+
+def _actor_payload(actor: TrustedActorContext) -> dict[str, object]:
+    payload = asdict(actor)
+    payload["group_ids"] = sorted(actor.group_ids)
+    payload["role_ids"] = sorted(actor.role_ids)
+    return payload
+
+
+def _plan_payload(plan) -> dict[str, object]:
+    payload = asdict(plan)
+    payload["decision_state"] = plan.decision_state.value
+    return payload
+
+
+def _approval_payload(approval) -> dict[str, object]:
+    return asdict(approval)
+
+
+def _job_payload(job) -> dict[str, object]:
+    return asdict(job)
+
+
+def _confirmation_payload(outcome) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "plan": _plan_payload(outcome.plan),
+        "confirmation": asdict(outcome.confirmation),
+    }
+    if outcome.approval is not None:
+        payload["approval"] = _approval_payload(outcome.approval)
+    if outcome.execution_job is not None:
+        payload["execution_job"] = _job_payload(outcome.execution_job)
+    return payload
+
+
+def _approval_decision_payload(outcome) -> dict[str, object]:
+    payload: dict[str, object] = {"approval": _approval_payload(outcome.approval)}
+    if outcome.execution_job is not None:
+        payload["execution_job"] = _job_payload(outcome.execution_job)
+    return payload
+
+
+def _assessment_report_payload(report) -> dict[str, object]:
+    payload = asdict(report)
+    payload["asset_versions"] = list(report.asset_versions)
+    payload["missing_materials"] = list(report.missing_materials)
+    payload["citations"] = list(report.citations)
+    return payload
+
+
+def _new_id() -> str:
+    return str(uuid4())
