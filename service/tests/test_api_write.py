@@ -43,6 +43,10 @@ def test_upload_file_endpoint_saves_without_overwrite(
         "path": "incoming/notes.txt",
         "name": "notes.txt",
         "size_bytes": 5,
+        "content_fingerprint": (
+            "sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e"
+            "1b161e5c1fa7425e73043362938b9824"
+        ),
     }
     assert (
         workspace_root / "incoming" / "notes.txt"
@@ -160,3 +164,110 @@ def test_issue_approval_token_endpoint_returns_plaintext_once(
     assert repeated_response.json()["error"]["code"] == (
         "plan_state"
     )
+def test_create_plan_rejects_destination_outside_user_permissions(
+    tmp_path: Path,
+):
+    """创建计划时必须拒绝超出用户授权前缀的目标路径。"""
+    from service.app.permissions import (
+        add_path_prefix,
+        initialize_database,
+        upsert_employee,
+    )
+
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "source.txt").write_text(
+        "source",
+        encoding="utf-8",
+    )
+
+    permissions_db = tmp_path / "permissions.db"
+    initialize_database(permissions_db)
+    upsert_employee(
+        permissions_db,
+        user_id="user-1",
+        email="user-1@example.com",
+        business_unit="事业部A",
+        department="部门A",
+        position="岗位A",
+        enabled=True,
+    )
+    add_path_prefix(
+        permissions_db,
+        user_id="user-1",
+        path_prefix="1",
+    )
+
+    main_module = importlib.import_module("service.app.main")
+    application = main_module.create_app(
+        workspace_root,
+        api_key="test-secret",
+        permissions_database=permissions_db,
+    )
+    client = TestClient(application)
+
+    response = client.post(
+        "/plans",
+        params={"user_id": "user-1"},
+        json={
+            "operations": [
+                {
+                    "action": "move_rename",
+                    "source": "source.txt",
+                    "destination": "outside/source.txt",
+                }
+            ]
+        },
+        headers=_authorized_headers(),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "path_not_allowed"
+
+
+def test_upload_rejects_directory_outside_user_permissions(
+    tmp_path: Path,
+):
+    from service.app.permissions import (
+        add_path_prefix,
+        initialize_database,
+        upsert_employee,
+    )
+
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    permissions_db = tmp_path / "permissions.db"
+    initialize_database(permissions_db)
+    upsert_employee(
+        permissions_db,
+        user_id="user-1",
+        email="user-1@example.com",
+        business_unit="unit",
+        department="department",
+        position="member",
+        enabled=True,
+    )
+    add_path_prefix(
+        permissions_db,
+        user_id="user-1",
+        path_prefix="organized",
+    )
+
+    main_module = importlib.import_module("service.app.main")
+    client = TestClient(
+        main_module.create_app(
+            workspace_root,
+            api_key="test-secret",
+            permissions_database=permissions_db,
+        )
+    )
+    response = client.post(
+        "/files/upload",
+        params={"user_id": "user-1"},
+        files={"file": ("notes.txt", b"hello", "text/plain")},
+        data={"directory": ""},
+        headers=_authorized_headers(),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "path_not_allowed"

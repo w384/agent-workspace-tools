@@ -9,12 +9,13 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from service.app.operations import preview_operations
+from service.app.paths import resolve_workspace_path
 
 
 _PLAN_LOCKS_GUARD = Lock()
 _PLAN_LOCKS: dict[str, RLock] = {}
 _PLAN_STATUS_FIELDS = (
-    "plan_id", "status", "plan_type", "file_count",
+    "plan_id", "plan_hash", "status", "plan_type", "file_count",
     "created_at", "approved_at", "completed_at",
     "failed_at", "operation_id", "rollback_status",
     "error_type",
@@ -31,6 +32,14 @@ class InvalidPlanIdError(ValueError):
 
 class PlanStateError(ValueError):
     """计划当前状态不允许执行请求的操作。"""
+
+
+class PlanIntegrityError(ValueError):
+    """计划内容与创建时的完整性摘要不一致。"""
+
+
+class PlanSourceChangedError(PlanIntegrityError):
+    """计划中的源文件内容已不同于确认时快照。"""
 
 
 class InvalidApprovalTokenError(PermissionError):
@@ -126,6 +135,81 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _calculate_plan_hash(
+    plan_id: str,
+    operations: list[dict[str, Any]],
+    *,
+    plan_type: str | None = None,
+    operation_id: str | None = None,
+    source_fingerprints: dict[str, str] | None = None,
+) -> str:
+    payload = json.dumps(
+        {
+            "operation_id": operation_id,
+            "plan_id": plan_id,
+            "plan_type": plan_type,
+            "operations": operations,
+            "source_fingerprints": source_fingerprints or {},
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(payload).hexdigest()}"
+
+
+def _file_fingerprint(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return f"sha256:{digest.hexdigest()}"
+
+
+def _calculate_source_fingerprints(
+    workspace_root: Path,
+    operations: list[dict[str, Any]],
+    *,
+    allow_trash_sources: bool = False,
+) -> dict[str, str]:
+    return {
+        operation["source"]: _file_fingerprint(
+            _resolve_snapshot_source(
+                workspace_root,
+                operation["source"],
+                allow_trash_sources=allow_trash_sources,
+            )
+        )
+        for operation in operations
+        if operation["action"] in {"move_rename", "trash", "move"}
+    }
+
+
+def _resolve_snapshot_source(
+    workspace_root: Path,
+    relative_path: str,
+    *,
+    allow_trash_sources: bool,
+) -> Path:
+    if (
+        allow_trash_sources
+        and isinstance(relative_path, str)
+        and PurePosixPath(relative_path).parts
+        and PurePosixPath(relative_path).parts[0].casefold()
+        == ".trash"
+    ):
+        trash_root = workspace_root.resolve() / ".trash"
+        candidate = (workspace_root.resolve() / relative_path).resolve()
+        try:
+            candidate.relative_to(trash_root)
+        except ValueError:
+            raise PlanSourceChangedError(
+                "恢复源文件超出内部回收目录"
+            ) from None
+        return candidate
+    return resolve_workspace_path(workspace_root, relative_path)
+
+
 def _build_confirmation(
     operations: list[dict[str, str]],
 ) -> dict[str, Any]:
@@ -179,13 +263,23 @@ def create_plan(
         operations=operations,
     )
     plan_id = str(uuid4())
+    source_fingerprints = _calculate_source_fingerprints(
+        workspace_root,
+        preview["operations"],
+    )
 
     plan = {
         "plan_id": plan_id,
+        "plan_hash": _calculate_plan_hash(
+            plan_id,
+            preview["operations"],
+            source_fingerprints=source_fingerprints,
+        ),
         "status": "pending_confirmation",
         "created_at": _utc_now(),
         "file_count": preview["file_count"],
         "operations": preview["operations"],
+        "source_fingerprints": source_fingerprints,
         "confirmation": _build_confirmation(
             preview["operations"]
         ),
@@ -222,6 +316,7 @@ def consume_approval_token(
     *,
     plan_id: str,
     token: str,
+    expected_plan_hash: str,
 ) -> dict[str, Any]:
     """验证并消费一次性令牌，锁定计划进入执行状态。"""
     with _get_plan_lock(plan_id):
@@ -234,6 +329,56 @@ def consume_approval_token(
         if plan["status"] != "approved":
             raise PlanStateError(
                 f"计划状态不允许执行：{plan['status']}"
+            )
+
+        if not isinstance(expected_plan_hash, str) or not expected_plan_hash:
+            raise PlanIntegrityError(
+                "计划内容完整性校验失败"
+            )
+
+        recalculated_plan_hash = _calculate_plan_hash(
+            plan["plan_id"],
+            plan["operations"],
+            plan_type=plan.get("plan_type"),
+            operation_id=plan.get("operation_id"),
+            source_fingerprints=plan.get("source_fingerprints"),
+        )
+        if not hmac.compare_digest(
+            str(plan.get("plan_hash", "")),
+            recalculated_plan_hash,
+        ):
+            raise PlanIntegrityError(
+                "计划内容完整性校验失败"
+            )
+        if not hmac.compare_digest(
+            expected_plan_hash,
+            recalculated_plan_hash,
+        ):
+            raise PlanIntegrityError(
+                "计划内容完整性校验失败"
+            )
+
+        source_fingerprints = plan.get("source_fingerprints")
+        try:
+            current_source_fingerprints = (
+                _calculate_source_fingerprints(
+                    workspace_root,
+                    plan["operations"],
+                    allow_trash_sources=(
+                        plan.get("plan_type") == "restore"
+                    ),
+                )
+            )
+        except (OSError, TypeError, ValueError):
+            raise PlanSourceChangedError(
+                "源文件已在确认后发生变化"
+            ) from None
+        if (
+            not isinstance(source_fingerprints, dict)
+            or current_source_fingerprints != source_fingerprints
+        ):
+            raise PlanSourceChangedError(
+                "源文件已在确认后发生变化"
             )
 
         expected_hash = plan["approval_token_hash"]

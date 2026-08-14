@@ -32,6 +32,7 @@ from service.app.plans import (
     PlanStateError,
     create_plan,
     issue_approval_token,
+    _read_plan,
     read_plan_status,
 )
 from service.app.restore import (
@@ -42,6 +43,10 @@ from service.app.restore import (
 )
 from service.app.search import search_files
 from service.app.upload import save_uploaded_file
+from service.app.permissions import (
+    get_user_permissions,
+    is_path_allowed,
+)
 
 
 DEFAULT_WORKSPACE_ROOT = Path(r"D:\AI\AgentWorkspace")
@@ -80,6 +85,7 @@ class CreatePlanRequest(BaseModel):
 
 class ApprovalTokenRequest(BaseModel):
     approval_token: str
+    plan_hash: str
 
 
 class APIError(Exception):
@@ -111,6 +117,7 @@ def create_app(
     workspace_root: Path,
     *,
     api_key: str,
+    permissions_database: Path | None = None,
 ) -> FastAPI:
     """创建绑定到指定工作区和 API Key 的 FastAPI 应用。"""
     application = FastAPI(
@@ -206,12 +213,29 @@ def create_app(
     def get_files(
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=10, ge=1, le=10),
+        user_id: str | None = Query(default=None),
         _authorized: None = Depends(require_api_key),
     ) -> dict:
+        path_prefixes = None
+
+        if permissions_database is not None and user_id:
+            permissions = get_user_permissions(
+                permissions_database,
+                user_id=user_id,
+            )
+            if not permissions["enabled"]:
+                raise APIError(
+                    status_code=403,
+                    code="user_disabled",
+                    message="用户权限已禁用",
+                )
+            path_prefixes = permissions["path_prefixes"]
+
         return list_files(
             resolved_workspace_root,
             page=page,
             page_size=page_size,
+            path_prefixes=path_prefixes,
         )
 
     @application.get("/files/search")
@@ -253,8 +277,30 @@ def create_app(
     async def upload_workspace_file(
         directory: str = Form(default=""),
         file: UploadFile = File(),
+        user_id: str | None = Query(default=None),
         _authorized: None = Depends(require_api_key),
     ) -> dict:
+        if permissions_database is not None and user_id:
+            permissions = get_user_permissions(
+                permissions_database,
+                user_id=user_id,
+            )
+            if not permissions["enabled"]:
+                raise APIError(
+                    status_code=403,
+                    code="user_disabled",
+                    message="用户权限已禁用",
+                )
+            if not is_path_allowed(
+                permissions["path_prefixes"],
+                directory,
+            ):
+                raise APIError(
+                    status_code=403,
+                    code="path_not_allowed",
+                    message="上传路径超出用户授权范围",
+                )
+
         content = await file.read(MAX_UPLOAD_BYTES + 1)
         if len(content) > MAX_UPLOAD_BYTES:
             raise APIError(
@@ -272,8 +318,51 @@ def create_app(
     @application.post("/plans", status_code=201)
     def create_operation_plan(
         request_body: CreatePlanRequest,
+        user_id: str | None = Query(default=None),
         _authorized: None = Depends(require_api_key),
     ) -> dict:
+        path_prefixes = None
+
+        if permissions_database is not None and user_id:
+            permissions = get_user_permissions(
+                permissions_database,
+                user_id=user_id,
+            )
+            if not permissions["enabled"]:
+                raise APIError(
+                    status_code=403,
+                    code="user_disabled",
+                    message="用户权限已禁用",
+                )
+            path_prefixes = permissions["path_prefixes"]
+
+            for operation in request_body.operations:
+                action = operation.get("action")
+                paths_to_check = []
+
+                if action == "create_folder":
+                    paths_to_check.append(
+                        operation.get("destination", "")
+                    )
+                else:
+                    paths_to_check.extend(
+                        [
+                            operation.get("source", ""),
+                            operation.get("destination", ""),
+                        ]
+                    )
+
+                if any(
+                    not isinstance(path, str)
+                    or not is_path_allowed(path_prefixes, path)
+                    for path in paths_to_check
+                ):
+                    raise APIError(
+                        status_code=403,
+                        code="path_not_allowed",
+                        message="操作路径超出用户授权范围",
+                    )
+
         return create_plan(
             resolved_workspace_root,
             operations=request_body.operations,
@@ -308,12 +397,54 @@ def create_app(
     def execute_operation_plan(
         plan_id: str,
         request_body: ApprovalTokenRequest,
+        user_id: str | None = Query(default=None),
         _authorized: None = Depends(require_api_key),
     ) -> dict:
+        if permissions_database is not None and user_id:
+            permissions = get_user_permissions(
+                permissions_database,
+                user_id=user_id,
+            )
+            if not permissions["enabled"]:
+                raise APIError(
+                    status_code=403,
+                    code="user_disabled",
+                    message="用户权限已禁用",
+                )
+
+            plan = _read_plan(
+                resolved_workspace_root,
+                plan_id,
+            )
+            for operation in plan["operations"]:
+                action = operation.get("action")
+                paths_to_check = (
+                    [operation.get("destination", "")]
+                    if action == "create_folder"
+                    else [
+                        operation.get("source", ""),
+                        operation.get("destination", ""),
+                    ]
+                )
+                if any(
+                    not isinstance(path, str)
+                    or not is_path_allowed(
+                        permissions["path_prefixes"],
+                        path,
+                    )
+                    for path in paths_to_check
+                ):
+                    raise APIError(
+                        status_code=403,
+                        code="path_not_allowed",
+                        message="操作路径超出用户授权范围",
+                    )
+
         return execute_plan(
             resolved_workspace_root,
             plan_id=plan_id,
             approval_token=request_body.approval_token,
+            expected_plan_hash=request_body.plan_hash,
         )
 
     @application.get("/operations/{operation_id}")
@@ -349,6 +480,7 @@ def create_app(
             resolved_workspace_root,
             plan_id=plan_id,
             approval_token=request_body.approval_token,
+            expected_plan_hash=request_body.plan_hash,
         )
 
     @application.post(
@@ -374,4 +506,10 @@ app = create_app(
         )
     ),
     api_key=load_api_key(os.environ),
+    permissions_database=Path(
+        os.environ.get(
+            "DIFY_AGENT_WORKSPACE_PERMISSIONS_DB",
+            r"D:\AI\AgentWorkspace\.file-manager\permissions.db",
+        )
+    ),
 )

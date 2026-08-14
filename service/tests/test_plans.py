@@ -167,6 +167,7 @@ def test_approval_token_is_hashed_and_can_only_be_used_once(
         workspace_root,
         plan_id=plan["plan_id"],
         token=token,
+        expected_plan_hash=plan["plan_hash"],
     )
     assert consumed_plan["status"] == "executing"
 
@@ -177,6 +178,7 @@ def test_approval_token_is_hashed_and_can_only_be_used_once(
             workspace_root,
             plan_id=plan["plan_id"],
             token=token,
+            expected_plan_hash=plan["plan_hash"],
         )
 
 
@@ -201,12 +203,14 @@ def test_invalid_approval_token_does_not_consume_plan(
             workspace_root,
             plan_id=plan["plan_id"],
             token="incorrect-token",
+            expected_plan_hash=plan["plan_hash"],
         )
 
     consumed_plan = plans_module.consume_approval_token(
         workspace_root,
         plan_id=plan["plan_id"],
         token=token,
+        expected_plan_hash=plan["plan_hash"],
     )
     assert consumed_plan["status"] == "executing"
 
@@ -287,6 +291,7 @@ def test_concurrent_token_consumption_allows_one_success(
                 workspace_root,
                 plan_id=plan["plan_id"],
                 token=token,
+                expected_plan_hash=plan["plan_hash"],
             )
             return "success"
         except Exception as error:

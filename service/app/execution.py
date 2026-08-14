@@ -104,12 +104,14 @@ def execute_plan(
     *,
     plan_id: str,
     approval_token: str,
+    expected_plan_hash: str,
 ) -> dict[str, Any]:
     """消费一次性令牌并执行已经确认的整理计划。"""
     plan = consume_approval_token(
         workspace_root,
         plan_id=plan_id,
         token=approval_token,
+        expected_plan_hash=expected_plan_hash,
     )
 
     applied_actions: list[dict[str, Any]] = []

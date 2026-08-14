@@ -109,7 +109,10 @@ def test_unexpected_permission_error_does_not_leak_local_path(
 
     response = client.post(
         "/plans/00000000-0000-0000-0000-000000000000/execute",
-        json={"approval_token": "token"},
+        json={
+            "approval_token": "token",
+            "plan_hash": "sha256:test",
+        },
         headers={"X-API-Key": "test-secret"},
     )
 

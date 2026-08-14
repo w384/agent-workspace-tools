@@ -13,6 +13,8 @@ from service.app.paths import (
     resolve_workspace_path,
 )
 from service.app.plans import (
+    _calculate_plan_hash,
+    _calculate_source_fingerprints,
     _read_plan,
     _utc_now,
     _write_plan,
@@ -92,6 +94,20 @@ def create_restore_plan(
             operation_log["undo_actions"]
         ),
     }
+    restore_plan["source_fingerprints"] = (
+        _calculate_source_fingerprints(
+            workspace_root,
+            restore_plan["operations"],
+            allow_trash_sources=True,
+        )
+    )
+    restore_plan["plan_hash"] = _calculate_plan_hash(
+        restore_plan["plan_id"],
+        restore_plan["operations"],
+        plan_type=restore_plan["plan_type"],
+        operation_id=restore_plan["operation_id"],
+        source_fingerprints=restore_plan["source_fingerprints"],
+    )
     _write_plan(workspace_root, restore_plan)
 
     operation_log["status"] = "restore_pending"
@@ -232,6 +248,7 @@ def restore_operation(
     *,
     plan_id: str,
     approval_token: str,
+    expected_plan_hash: str,
 ) -> dict[str, Any]:
     """消费一次性令牌并实际恢复原操作。"""
     pending_plan = _read_plan(workspace_root, plan_id)
@@ -242,6 +259,7 @@ def restore_operation(
         workspace_root,
         plan_id=plan_id,
         token=approval_token,
+        expected_plan_hash=expected_plan_hash,
     )
     operation_id = plan["operation_id"]
     operation_log = read_operation_log(

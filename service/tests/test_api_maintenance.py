@@ -109,7 +109,10 @@ def test_all_business_routes_reject_missing_api_key(
         client.post(f"/plans/{resource_id}/approval-token"),
         client.post(
             f"/plans/{resource_id}/execute",
-            json={"approval_token": "token"},
+            json={
+                "approval_token": "token",
+                "plan_hash": "sha256:test",
+            },
         ),
         client.get(f"/operations/{resource_id}"),
         client.post(
@@ -117,7 +120,10 @@ def test_all_business_routes_reject_missing_api_key(
         ),
         client.post(
             f"/plans/{resource_id}/restore",
-            json={"approval_token": "token"},
+            json={
+                "approval_token": "token",
+                "plan_hash": "sha256:test",
+            },
         ),
         client.post(
             "/maintenance/cleanup-expired-operations"

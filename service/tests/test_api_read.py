@@ -101,3 +101,66 @@ def test_get_file_endpoint_does_not_read_large_file(
     assert body["size_bytes"] == 15 * 1024 * 1024 + 1
     assert body["content_available"] is False
     assert body["content_base64"] is None
+def test_list_files_endpoint_filters_by_user_permissions(
+    tmp_path: Path,
+):
+    """带 user_id 调用列表接口时，只返回该用户有权访问的路径。"""
+    from service.app.permissions import (
+        add_path_prefix,
+        initialize_database,
+        upsert_employee,
+    )
+
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "1").mkdir()
+    (workspace_root / "1" / "allowed.txt").write_text(
+        "allowed",
+        encoding="utf-8",
+    )
+    (workspace_root / "secret.txt").write_text(
+        "secret",
+        encoding="utf-8",
+    )
+
+    permissions_db = tmp_path / "permissions.db"
+    initialize_database(permissions_db)
+    upsert_employee(
+        permissions_db,
+        user_id="user-1",
+        email="user-1@example.com",
+        business_unit="事业部A",
+        department="部门A",
+        position="岗位A",
+enabled=True,
+    )
+    add_path_prefix(
+        permissions_db,
+        user_id="user-1",
+        path_prefix="1",
+    )
+
+    main_module = importlib.import_module("service.app.main")
+    application = main_module.create_app(
+        workspace_root,
+        api_key="test-secret",
+        permissions_database=permissions_db,
+    )
+    client = TestClient(application)
+
+    response = client.get(
+        "/files",
+        params={
+            "page": 1,
+            "page_size": 10,
+            "user_id": "user-1",
+        },
+        headers=_authorized_headers(),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert [item["path"] for item in body["files"]] == [
+        "1/allowed.txt"
+    ]

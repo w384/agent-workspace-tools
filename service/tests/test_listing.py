@@ -108,3 +108,37 @@ def test_list_files_returns_file_metadata(tmp_path: Path):
     assert item["size_bytes"] == 5
     assert isinstance(item["modified_at"], str)
     assert item["modified_at"]
+
+
+def test_list_files_filters_by_authorized_path_prefix(
+    tmp_path: Path,
+):
+    listing_module = importlib.import_module(
+        "service.app.listing"
+    )
+
+    workspace_root = tmp_path / "workspace"
+    (workspace_root / "1").mkdir(parents=True)
+    (workspace_root / "10").mkdir(parents=True)
+
+    (workspace_root / "1" / "allowed.txt").write_text(
+        "allowed",
+        encoding="utf-8",
+    )
+    (workspace_root / "10" / "blocked.txt").write_text(
+        "blocked",
+        encoding="utf-8",
+    )
+
+    result = listing_module.list_files(
+        workspace_root,
+        page=1,
+        page_size=10,
+        path_prefixes=["1"],
+    )
+
+    assert result["total"] == 1
+    assert [
+        item["path"]
+        for item in result["files"]
+    ] == ["1/allowed.txt"]

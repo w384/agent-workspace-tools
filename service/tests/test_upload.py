@@ -32,6 +32,10 @@ def test_save_uploaded_file_writes_inside_workspace(
         "path": "incoming/report.txt",
         "name": "report.txt",
         "size_bytes": 5,
+        "content_fingerprint": (
+            "sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e"
+            "1b161e5c1fa7425e73043362938b9824"
+        ),
     }
 
 

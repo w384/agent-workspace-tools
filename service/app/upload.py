@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 from typing import Any
 from service.app.paths import resolve_workspace_path
@@ -53,4 +54,7 @@ def save_uploaded_file(
         ).as_posix(),
         "name": target_path.name,
         "size_bytes": len(content),
+        "content_fingerprint": (
+            f"sha256:{hashlib.sha256(content).hexdigest()}"
+        ),
     }

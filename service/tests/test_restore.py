@@ -46,6 +46,7 @@ def _execute_recoverable_operation(
         workspace_root,
         plan_id=plan["plan_id"],
         approval_token=token,
+        expected_plan_hash=plan["plan_hash"],
     )
     return workspace_root, completed_plan
 
@@ -165,6 +166,7 @@ def test_restore_operation_restores_files_and_marks_log(
         workspace_root,
         plan_id=restore_plan["plan_id"],
         approval_token=token,
+        expected_plan_hash=restore_plan["plan_hash"],
     )
 
     restored_draft = (
@@ -252,6 +254,7 @@ def test_restore_expiring_after_approval_resets_operation_state(
             workspace_root,
             plan_id=restore_plan["plan_id"],
             approval_token=token,
+            expected_plan_hash=restore_plan["plan_hash"],
         )
 
     restore_plan_path = (
@@ -271,3 +274,58 @@ def test_restore_expiring_after_approval_resets_operation_state(
     assert stored_operation_log["status"] == "completed"
     assert "restore_plan_id" not in stored_operation_log
     assert (workspace_root / "sorted" / "final.txt").is_file()
+
+
+def test_restore_revalidates_internal_source_fingerprint_before_token_consumption(
+    tmp_path: Path,
+):
+    workspace_root, completed_plan = (
+        _execute_recoverable_operation(tmp_path)
+    )
+    plans_module = importlib.import_module("service.app.plans")
+    restore_module = importlib.import_module("service.app.restore")
+    restore_plan = restore_module.create_restore_plan(
+        workspace_root,
+        operation_id=completed_plan["operation_id"],
+    )
+    token = plans_module.issue_approval_token(
+        workspace_root,
+        plan_id=restore_plan["plan_id"],
+    )
+    move_action = next(
+        action
+        for action in restore_plan["operations"]
+        if action["action"] == "move"
+    )
+    source_path = workspace_root / move_action["source"]
+    approved_content = source_path.read_bytes()
+    source_path.write_bytes(b"changed restore source")
+
+    with pytest.raises(plans_module.PlanSourceChangedError):
+        restore_module.restore_operation(
+            workspace_root,
+            plan_id=restore_plan["plan_id"],
+            approval_token=token,
+            expected_plan_hash=restore_plan["plan_hash"],
+        )
+
+    plan_path = (
+        workspace_root
+        / ".file-manager"
+        / "plans"
+        / f"{restore_plan['plan_id']}.json"
+    )
+    rejected_plan = json.loads(
+        plan_path.read_text(encoding="utf-8")
+    )
+    assert rejected_plan["status"] == "approved"
+    assert "approval_token_hash" in rejected_plan
+
+    source_path.write_bytes(approved_content)
+    restored = restore_module.restore_operation(
+        workspace_root,
+        plan_id=restore_plan["plan_id"],
+        approval_token=token,
+        expected_plan_hash=restore_plan["plan_hash"],
+    )
+    assert restored["status"] == "completed"

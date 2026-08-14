@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -108,7 +109,7 @@ def test_execute_plan_and_read_operation_log_endpoints(
 
     execute_response = client.post(
         f"/plans/{plan['plan_id']}/execute",
-        json={"approval_token": token},
+        json={"approval_token": token, "plan_hash": plan["plan_hash"]},
         headers=_headers(),
     )
 
@@ -136,10 +137,102 @@ def test_execute_plan_and_read_operation_log_endpoints(
 
     repeated_response = client.post(
         f"/plans/{plan['plan_id']}/execute",
-        json={"approval_token": token},
+        json={"approval_token": token, "plan_hash": plan["plan_hash"]},
         headers=_headers(),
     )
     assert repeated_response.status_code == 409
+
+
+def test_execute_plan_rejects_operations_outside_user_permissions(
+    tmp_path: Path,
+):
+    """执行阶段必须再次校验当前用户权限，不能复用创建者权限。"""
+    from service.app.permissions import (
+        add_path_prefix,
+        initialize_database,
+        upsert_employee,
+    )
+
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    source_file = workspace_root / "notes.txt"
+    source_file.write_bytes(b"hello")
+
+    permissions_db = tmp_path / "permissions.db"
+    initialize_database(permissions_db)
+    upsert_employee(
+        permissions_db,
+        user_id="owner-user",
+        email="owner@example.com",
+        business_unit="unit",
+        department="department",
+        position="owner",
+        enabled=True,
+    )
+    add_path_prefix(
+        permissions_db,
+        user_id="owner-user",
+        path_prefix="",
+    )
+    upsert_employee(
+        permissions_db,
+        user_id="member-user",
+        email="member@example.com",
+        business_unit="unit",
+        department="department",
+        position="member",
+        enabled=True,
+    )
+    add_path_prefix(
+        permissions_db,
+        user_id="member-user",
+        path_prefix="organized",
+    )
+
+    main_module = importlib.import_module("service.app.main")
+    client = TestClient(
+        main_module.create_app(
+            workspace_root,
+            api_key=API_KEY,
+            permissions_database=permissions_db,
+        )
+    )
+    plan_response = client.post(
+        "/plans",
+        params={"user_id": "owner-user"},
+        json={
+            "operations": [
+                {
+                    "action": "move_rename",
+                    "source": "notes.txt",
+                    "destination": "renamed-notes.txt",
+                }
+            ]
+        },
+        headers=_headers(),
+    )
+    assert plan_response.status_code == 201
+    plan = plan_response.json()
+    plan_id = plan["plan_id"]
+    token = _issue_token(client, plan_id)
+
+    response = client.post(
+        f"/plans/{plan_id}/execute",
+        params={"user_id": "member-user"},
+        json={"approval_token": token, "plan_hash": plan["plan_hash"]},
+        headers=_headers(),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "path_not_allowed"
+    assert source_file.is_file()
+    retry_response = client.post(
+        f"/plans/{plan_id}/execute",
+        params={"user_id": "owner-user"},
+        json={"approval_token": token, "plan_hash": plan["plan_hash"]},
+        headers=_headers(),
+    )
+    assert retry_response.status_code == 200
 
 
 def test_execute_endpoint_rejects_wrong_token_without_consuming_it(
@@ -164,7 +257,10 @@ def test_execute_endpoint_rejects_wrong_token_without_consuming_it(
 
     wrong_response = client.post(
         f"/plans/{plan['plan_id']}/execute",
-        json={"approval_token": "wrong-token"},
+        json={
+            "approval_token": "wrong-token",
+            "plan_hash": plan["plan_hash"],
+        },
         headers=_headers(),
     )
 
@@ -176,10 +272,71 @@ def test_execute_endpoint_rejects_wrong_token_without_consuming_it(
 
     correct_response = client.post(
         f"/plans/{plan['plan_id']}/execute",
-        json={"approval_token": token},
+        json={"approval_token": token, "plan_hash": plan["plan_hash"]},
         headers=_headers(),
     )
     assert correct_response.status_code == 200
+    assert (workspace_root / "sorted-notes.txt").is_file()
+
+
+@pytest.mark.parametrize(
+    ("request_json", "expected_status", "expected_code"),
+    [
+        ({"approval_token": "{token}"}, 422, None),
+        (
+            {
+                "approval_token": "{token}",
+                "plan_hash": "sha256:" + "b" * 64,
+            },
+            400,
+            "plan_integrity",
+        ),
+    ],
+)
+def test_execute_endpoint_rejects_missing_or_wrong_plan_hash_without_consuming_token(
+    tmp_path: Path,
+    request_json: dict[str, str],
+    expected_status: int,
+    expected_code: str | None,
+):
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    source_file = workspace_root / "notes.txt"
+    source_file.write_bytes(b"hello")
+    client = TestClient(_create_application(workspace_root))
+    plan = _create_plan(
+        client,
+        [
+            {
+                "action": "move_rename",
+                "source": "notes.txt",
+                "destination": "sorted-notes.txt",
+            }
+        ],
+    )
+    token = _issue_token(client, plan["plan_id"])
+    payload = {
+        key: token if value == "{token}" else value
+        for key, value in request_json.items()
+    }
+
+    rejected_response = client.post(
+        f"/plans/{plan['plan_id']}/execute",
+        json=payload,
+        headers=_headers(),
+    )
+
+    assert rejected_response.status_code == expected_status
+    if expected_code is not None:
+        assert rejected_response.json()["error"]["code"] == expected_code
+    assert source_file.is_file()
+
+    retry_response = client.post(
+        f"/plans/{plan['plan_id']}/execute",
+        json={"approval_token": token, "plan_hash": plan["plan_hash"]},
+        headers=_headers(),
+    )
+    assert retry_response.status_code == 200
     assert (workspace_root / "sorted-notes.txt").is_file()
 
 
@@ -209,7 +366,10 @@ def test_execute_endpoint_consumes_token_once_under_concurrency(
         with TestClient(application) as client:
             response = client.post(
                 f"/plans/{plan['plan_id']}/execute",
-                json={"approval_token": token},
+                json={
+                    "approval_token": token,
+                    "plan_hash": plan["plan_hash"],
+                },
                 headers=_headers(),
             )
             return response.status_code, response.json()
@@ -246,7 +406,7 @@ def test_restore_operation_endpoints_restore_actual_file(
     token = _issue_token(client, plan["plan_id"])
     execute_response = client.post(
         f"/plans/{plan['plan_id']}/execute",
-        json={"approval_token": token},
+        json={"approval_token": token, "plan_hash": plan["plan_hash"]},
         headers=_headers(),
     )
     operation_id = execute_response.json()["operation_id"]
@@ -264,7 +424,10 @@ def test_restore_operation_endpoints_restore_actual_file(
     restore_token = _issue_token(client, restore_plan["plan_id"])
     restore_response = client.post(
         f"/plans/{restore_plan['plan_id']}/restore",
-        json={"approval_token": restore_token},
+        json={
+            "approval_token": restore_token,
+            "plan_hash": restore_plan["plan_hash"],
+        },
         headers=_headers(),
     )
 

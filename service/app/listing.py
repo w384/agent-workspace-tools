@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from service.app.permissions import is_path_allowed
 
 
 _MANAGEMENT_DIRECTORIES = frozenset({
@@ -49,16 +50,25 @@ def list_files(
     *,
     page: int,
     page_size: int,
+    path_prefixes: list[str] | None = None,
 ) -> dict[str, Any]:
     if not 1 <= page_size <= 10:
         raise PageSizeLimitError(
             "page_size 必须在1到10之间"
         )
+
     all_files = sorted(
         (
             path
             for path in workspace_root.rglob("*")
             if _is_visible_file(workspace_root, path)
+            and (
+                path_prefixes is None
+                or is_path_allowed(
+                    path_prefixes,
+                    path.relative_to(workspace_root).as_posix(),
+                )
+            )
         ),
         key=lambda path: path.relative_to(workspace_root)
         .as_posix()
