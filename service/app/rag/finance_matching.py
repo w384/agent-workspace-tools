@@ -5,6 +5,7 @@ from typing import Protocol, Sequence
 from service.app.rag.contracts import (
     ActiveAssetVersion,
     Chunk,
+    LLMUnavailableError,
     PermissionContext,
     RetrievalFilter,
 )
@@ -157,7 +158,15 @@ class FinanceMaterialMatchingService:
             hits=hits,
         )
         if include_explanation and self._explanation_port:
-            explanation = self._explanation_port.explain(result)
+            try:
+                explanation = self._explanation_port.explain(result)
+            except LLMUnavailableError:
+                return replace(
+                    result,
+                    explanation=None,
+                    llm_invoked=True,
+                    reason="llm_unavailable",
+                )
             return replace(
                 result,
                 explanation=explanation,

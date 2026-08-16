@@ -7,6 +7,14 @@ def _require_non_empty(value: str, field_name: str) -> None:
         raise ValueError(f"{field_name} must not be empty")
 
 
+class LLMConfigurationError(RuntimeError):
+    """Raised when real LLM credentials are missing or invalid."""
+
+
+class LLMUnavailableError(RuntimeError):
+    """Raised when the real LLM endpoint fails or times out."""
+
+
 class AnswerStatus(StrEnum):
     ANSWERED = "ANSWERED"
     DENIED = "DENIED"

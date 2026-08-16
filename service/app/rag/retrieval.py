@@ -6,6 +6,7 @@ from service.app.rag.contracts import (
     AssetReference,
     Citation,
     CitationPathKind,
+    LLMUnavailableError,
     PermissionContext,
     RetrievalAuditEvent,
     RetrievalFilter,
@@ -99,10 +100,16 @@ class RetrievalService:
         ):
             return self._record_scope_violation(context)
 
-        answer = self._answer_generator.generate(
-            question=question,
-            evidence=evidence,
-        )
+        try:
+            answer = self._answer_generator.generate(
+                question=question,
+                evidence=evidence,
+            )
+        except LLMUnavailableError:
+            return self._record_llm_unavailable(
+                context,
+                retrieved_count=len(hits),
+            )
         citations = tuple(
             _build_citation(
                 hit,
@@ -144,6 +151,30 @@ class RetrievalService:
             citations=(),
             retrieved_count=retrieved_count,
             llm_invoked=False,
+        )
+        self._audit_sink.record(
+            RetrievalAuditEvent(
+                request_id=context.request_id,
+                status=result.status,
+                authorized_candidate_count=retrieved_count,
+                evidence_count=0,
+            )
+        )
+        return result
+
+    def _record_llm_unavailable(
+        self,
+        context: PermissionContext,
+        *,
+        retrieved_count: int,
+    ) -> AnswerResult:
+        result = AnswerResult(
+            status=AnswerStatus.REFUSED,
+            answer=None,
+            reason="llm_unavailable",
+            citations=(),
+            retrieved_count=retrieved_count,
+            llm_invoked=True,
         )
         self._audit_sink.record(
             RetrievalAuditEvent(
