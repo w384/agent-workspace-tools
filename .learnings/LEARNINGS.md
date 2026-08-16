@@ -30,6 +30,37 @@
 
 ---
 
+## [LRN-20260816-001] correction
+
+**Logged**: 2026-08-16
+**Priority**: high
+**Status**: resolved
+**Area**: process
+
+### Summary
+
+总集成拆出"执行线程（executor）"承接 B 类机械执行，Q 授权其可做执行端域内写操作；"不得实现控制面/RAG 重叠功能、不得跨线程决策"仍保留。
+
+### Details
+
+此前 LRN-20260813-001 要求子智能体仅只读验证。Q 于 2026-08-16 放宽：执行线程可做 git 提交/合并、证据落盘、runbook/checklist 起草等 B 类写操作，但仍是总集成下属；不得触碰控制面/RAG 模块所有权，不得裁决集成顺序/Gate/范围/契约，不得 push，不得自行扩大提交范围，不得跨线程协调。归属冲突、测试失败根因不明、清单外需求一律回总集成裁决。
+
+### Suggested Action
+
+给执行线程派活使用固定结构（目标 + 可验证产出 + 文件/命令清单 + 提交信息 + 范围边界 + 回报格式）；执行线程只报事实与原始证据，不做判定。
+
+### Metadata
+
+- Source: user_feedback
+- Related Files: docs/agent/thread-handoff-2026-08-14.md, docs/agent/v2-role-map.md, docs/contracts/frozen-v2-integration-contract.md
+- Tags: executor, subagent, ownership, write-scope, integration
+- Pattern-Key: execution.executor-thread-b-class-writes
+- Recurrence-Count: 1
+- First-Seen: 2026-08-16
+- Last-Seen: 2026-08-16
+
+---
+
 ## [LRN-20260813-001] correction
 
 **Logged**: 2026-08-13
