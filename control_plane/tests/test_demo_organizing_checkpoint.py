@@ -6,8 +6,13 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 import pytest
 
+import httpx
+
 from control_plane.app.demo_rag import DemoRagPort
 from control_plane.app.domain import Action, PermissionGrant, PrincipalType, TrustedActorContext
+
+from conftest import RecordingHttpxClient, llm_environment
+
 from control_plane.app.local_file_executor import LocalWorkspaceFileExecutorAdapter
 from control_plane.app.main import create_app as create_control_plane_app
 from control_plane.app.repository import InMemoryControlPlaneRepository
@@ -69,7 +74,10 @@ class _WorkspaceClient:
 
 def test_controlled_sample_plan_moves_files_and_preserves_versioned_rag_reference(
     tmp_path: Path,
+    monkeypatch,
 ):
+    RecordingHttpxClient.requests = []
+    monkeypatch.setattr(httpx, "Client", RecordingHttpxClient)
     fixture = json.loads(PLAN_FIXTURE.read_text(encoding="utf-8"))
     assert fixture["source_type"] == "fixed-demo-fixture-not-llm-runtime"
     operations = tuple(fixture["operations"])
@@ -126,7 +134,13 @@ def test_controlled_sample_plan_moves_files_and_preserves_versioned_rag_referenc
 
     moved_asset = assets[operations[0]["source_path"]]
     moved_version = repository.get_asset_version(moved_asset.active_version_id)
-    rag_port = DemoRagPort(repository=repository, search_index=index)
+    from service.app.rag.llm import build_llm_answer_generator
+
+    rag_port = DemoRagPort(
+        repository=repository,
+        search_index=index,
+        answer_generator=build_llm_answer_generator(llm_environment()),
+    )
     bff = create_control_plane_app(
         repository=repository,
         file_executor=executor,
@@ -160,6 +174,9 @@ def test_controlled_sample_plan_moves_files_and_preserves_versioned_rag_referenc
     assert query.status_code == 200
     citation = query.json()["citations"][0]
     assert query.json()["status"] == "ANSWERED"
+    assert query.json()["answer"] == "LLM 依据授权证据生成的回答"
+    assert query.json()["llm_invoked"] is True
+    assert len(RecordingHttpxClient.requests) == 1
     assert citation["asset_version_id"] == moved_version.asset_version_id
     assert citation["current_path"] == operations[0]["target_path"]
     assert citation["version_path"] == operations[0]["source_path"]

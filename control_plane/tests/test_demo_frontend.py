@@ -31,6 +31,15 @@ def test_demo_frontend_does_not_leak_credentials_or_keys(client) -> None:
         assert "secret" not in body
 
 
+def test_demo_frontend_does_not_leak_llm_credential_names(client) -> None:
+    for path in ("/demo/", "/demo/app.js", "/demo/style.css"):
+        body = _body(client, path).lower()
+        assert "llm_api_key" not in body
+        assert "llm_base_url" not in body
+        assert "llm_model" not in body
+        assert "authorization: bearer" not in body
+
+
 def test_demo_frontend_hides_local_filesystem_paths(client) -> None:
     for path in ("/demo/", "/demo/app.js", "/demo/style.css"):
         body = _body(client, path)

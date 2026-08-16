@@ -149,6 +149,47 @@ class RecordingFileExecutor:
         return self.execution_result
 
 
+class RecordingHttpxClient:
+    """Stand-in for httpx.Client that records requests without network."""
+
+    responses = [
+        {"choices": [{"message": {"content": "LLM 依据授权证据生成的回答"}}]}
+    ]
+
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def post(self, url, json=None, headers=None):
+        RecordingHttpxClient.requests.append(
+            {"url": url, "json": json, "headers": headers}
+        )
+        return _FakeHttpxResponse()
+
+
+class _FakeHttpxResponse:
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return RecordingHttpxClient.responses[0]
+
+
+RecordingHttpxClient.requests = []
+
+
+def llm_environment() -> dict[str, str]:
+    return {
+        "RAG_LLM_BASE_URL": "https://llm.example.test/v1",
+        "RAG_LLM_API_KEY": "llm-super-secret-key",
+        "RAG_LLM_MODEL": "demo-llm-model",
+    }
 @dataclass(frozen=True, slots=True)
 class RecordedEnqueue:
     actor: TrustedActorContext

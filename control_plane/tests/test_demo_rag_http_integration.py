@@ -1,6 +1,10 @@
 from pathlib import Path
 
+import httpx
+
 from control_plane.app.demo_rag import DemoRagPort
+
+from conftest import RecordingHttpxClient, llm_environment
 from control_plane.app.domain import (
     Action,
     GrantEffect,
@@ -11,6 +15,7 @@ from service.app.rag.contracts import ActiveAssetVersion
 from service.app.rag.demo_document_parser import DemoDocumentParser
 from service.app.rag.ingestion import IngestionRequest
 from service.app.rag.index import InMemorySearchIndex
+from service.app.rag.llm import build_llm_answer_generator
 
 
 DEMO_SOURCE = (
@@ -24,8 +29,13 @@ PDF_PATH = "验收交付/2026春季新品项目验收清单.pdf"
 PDF_MIME_TYPE = "application/pdf"
 
 
+def _patch_httpx_client(monkeypatch):
+    RecordingHttpxClient.requests = []
+    monkeypatch.setattr(httpx, "Client", RecordingHttpxClient)
+
+
 def test_bff_query_returns_real_parsed_pdf_citation_for_authenticated_a(
-    client_as_a, repository, demo_identities, file_executor
+    client_as_a, repository, demo_identities, file_executor, monkeypatch
 ):
     asset = repository.get_or_create_asset(
         "workspace-a", PDF_PATH, "2026春季新品项目验收清单.pdf", "user-a"
@@ -68,10 +78,16 @@ def test_bff_query_returns_real_parsed_pdf_citation_for_authenticated_a(
     from control_plane.app.main import create_app
     from conftest import AsgiClient
 
+    _patch_httpx_client(monkeypatch)
+    rag_port = DemoRagPort(
+        repository=repository,
+        search_index=index,
+        answer_generator=build_llm_answer_generator(llm_environment()),
+    )
     app = create_app(
         repository=repository,
         file_executor=file_executor,
-        rag_port=DemoRagPort(repository=repository, search_index=index),
+        rag_port=rag_port,
         demo_identities=demo_identities,
         internal_service_key="demo-internal-key",
         approver_role_id="role-approver-demo",
@@ -93,8 +109,10 @@ def test_bff_query_returns_real_parsed_pdf_citation_for_authenticated_a(
 
     assert response.status_code == 200
     payload = response.json()
-    assert "验收要求一" in payload["answer"]
     assert payload["status"] == "ANSWERED"
+    assert payload["answer"] == "LLM 依据授权证据生成的回答"
+    assert payload["llm_invoked"] is True
+    assert len(RecordingHttpxClient.requests) == 1
     assert payload["citations"] == [
         {
             "asset_id": asset.asset_id,
@@ -111,7 +129,7 @@ def test_bff_query_returns_real_parsed_pdf_citation_for_authenticated_a(
 
 
 def test_bff_query_denies_a_before_scoring_and_allows_b_explicit_a_b_scope(
-    repository, demo_identities, file_executor
+    repository, demo_identities, file_executor, monkeypatch
 ):
     acceptance_asset, acceptance_version = _add_ready_asset(
         repository, path=PDF_PATH, created_by="user-a"
@@ -164,7 +182,12 @@ def test_bff_query_denies_a_before_scoring_and_allows_b_explicit_a_b_scope(
     from control_plane.app.main import create_app
     from conftest import AsgiClient
 
-    rag_port = DemoRagPort(repository=repository, search_index=index)
+    _patch_httpx_client(monkeypatch)
+    rag_port = DemoRagPort(
+        repository=repository,
+        search_index=index,
+        answer_generator=build_llm_answer_generator(llm_environment()),
+    )
     app = create_app(
         repository=repository,
         file_executor=file_executor,
@@ -189,6 +212,7 @@ def test_bff_query_denies_a_before_scoring_and_allows_b_explicit_a_b_scope(
     assert denied.json()["citations"] == []
     assert scored_chunk_ids == []
     assert rag_port.audit_events[-1].authorized_candidate_count == 0
+    assert RecordingHttpxClient.requests == []
 
     b_client = _login(AsgiClient(app), username="bob", password="demo-b-password")
     b_legal = b_client.post(
@@ -201,6 +225,9 @@ def test_bff_query_denies_a_before_scoring_and_allows_b_explicit_a_b_scope(
 
     assert b_legal.status_code == 200
     assert b_legal.json()["status"] == "ANSWERED"
+    assert b_legal.json()["llm_invoked"] is True
+    assert b_legal.json()["answer"] == "LLM 依据授权证据生成的回答"
+    assert len(RecordingHttpxClient.requests) == 1
     assert {citation["current_path"] for citation in b_legal.json()["citations"]} == {
         LEGAL_PATH
     }
@@ -215,6 +242,7 @@ def test_bff_query_denies_a_before_scoring_and_allows_b_explicit_a_b_scope(
 
     assert b_acceptance.status_code == 200
     assert b_acceptance.json()["status"] == "ANSWERED"
+    assert len(RecordingHttpxClient.requests) == 2
     assert {citation["current_path"] for citation in b_acceptance.json()["citations"]} == {
         PDF_PATH
     }
@@ -265,3 +293,74 @@ def _login(client, *, username: str, password: str):
     )
     assert response.status_code == 200
     return client
+
+
+def test_bff_query_never_leaks_env_llm_credentials_in_response_or_audit(
+    repository, demo_identities, file_executor, monkeypatch
+):
+    from control_plane.app.main import create_app
+    from conftest import AsgiClient
+
+    acceptance_asset, acceptance_version = _add_ready_asset(
+        repository, path=PDF_PATH, created_by="user-a"
+    )
+    repository.add_permission_grant(
+        PermissionGrant(
+            grant_id="a-query-llm-credential",
+            workspace_id="workspace-a",
+            context_version="acl_2026_08_13",
+            principal_type=PrincipalType.USER,
+            principal_id="user-a",
+            action=Action.QUERY,
+            path_prefix="验收交付",
+        )
+    )
+    parser = DemoDocumentParser(DEMO_SOURCE)
+    index = InMemorySearchIndex(scorer=lambda _question, _chunk: 0.95)
+    _index_demo_source(
+        index,
+        parser,
+        asset_id=acceptance_asset.asset_id,
+        version_id=acceptance_version.asset_version_id,
+        source_ref=PDF_PATH,
+        mime_type=PDF_MIME_TYPE,
+    )
+
+    _patch_httpx_client(monkeypatch)
+    monkeypatch.setenv("RAG_LLM_BASE_URL", "https://llm.example.test/v1")
+    monkeypatch.setenv("RAG_LLM_API_KEY", "llm-super-secret-key")
+    monkeypatch.setenv("RAG_LLM_MODEL", "demo-llm-model")
+    rag_port = DemoRagPort(repository=repository, search_index=index)
+    app = create_app(
+        repository=repository,
+        file_executor=file_executor,
+        rag_port=rag_port,
+        demo_identities=demo_identities,
+        internal_service_key="demo-internal-key",
+        approver_role_id="role-approver-demo",
+    )
+    client = _login(AsgiClient(app), username="alice", password="demo-a-password")
+
+    response = client.post(
+        "/api/retrieval/query",
+        json_body={
+            "question": "项目验收要求是什么？",
+            "asset_id": acceptance_asset.asset_id,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ANSWERED"
+    assert payload["answer"] == "LLM 依据授权证据生成的回答"
+    assert payload["llm_invoked"] is True
+    serialized = str(payload)
+    assert "llm-super-secret-key" not in serialized
+    assert "llm.example.test" not in serialized
+    assert "demo-llm-model" not in serialized
+    assert "llm-super-secret-key" not in repr(rag_port.audit_events)
+    assert "llm-super-secret-key" not in repr(repository.list_audit_events())
+    authorization = RecordingHttpxClient.requests[-1]["headers"].get(
+        "Authorization", ""
+    )
+    assert authorization == "Bearer llm-super-secret-key"

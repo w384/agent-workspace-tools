@@ -1,5 +1,6 @@
 """In-process RAG query bridge for the controlled public-drive demo assets."""
 
+import os
 from dataclasses import asdict
 from typing import Mapping
 
@@ -10,10 +11,12 @@ from control_plane.app.repository import ControlPlaneRepository
 from service.app.rag.control_plane_adapter import ControlPlaneRetrievalAdapter
 from service.app.rag.contracts import (
     AnswerStatus,
+    LLMConfigurationError,
     PermissionContext,
     RetrievalAuditEvent,
     RetrievalFilter,
 )
+from service.app.rag.llm import build_llm_answer_generator
 from service.app.rag.retrieval import RetrievalService
 
 
@@ -26,10 +29,14 @@ class DemoRagPort:
         repository: ControlPlaneRepository,
         search_index: object,
         minimum_evidence_score: float = 0.75,
+        answer_generator: object | None = None,
     ) -> None:
         self._repository = repository
         self._search_index = search_index
         self._minimum_evidence_score = minimum_evidence_score
+        if answer_generator is None:
+            answer_generator = _build_default_answer_generator()
+        self._answer_generator = answer_generator
         self.audit_events: list[RetrievalAuditEvent] = []
 
     def enqueue_version(
@@ -51,6 +58,8 @@ class DemoRagPort:
         asset = self._get_authorized_asset(actor, asset_id)
         if asset is None:
             return self._denied_payload(actor)
+        if self._answer_generator is None:
+            return self._llm_unavailable_payload(actor)
         result = RetrievalService(
             control_plane=ControlPlaneRetrievalAdapter(
                 repository=self._repository,
@@ -62,7 +71,7 @@ class DemoRagPort:
                 asset_version_id=asset.active_version_id,
             ),
             reranker=_IdentityReranker(),
-            answer_generator=_EvidenceAnswerGenerator(),
+            answer_generator=self._answer_generator,
             audit_sink=self,
             minimum_evidence_score=self._minimum_evidence_score,
         ).answer(
@@ -130,16 +139,30 @@ class DemoRagPort:
             "citations": [],
         }
 
+    def _llm_unavailable_payload(
+        self, actor: TrustedActorContext
+    ) -> Mapping[str, object]:
+        self.record(
+            RetrievalAuditEvent(
+                request_id=actor.request_id,
+                status=AnswerStatus.REFUSED,
+                authorized_candidate_count=0,
+                evidence_count=0,
+            )
+        )
+        return {
+            "status": AnswerStatus.REFUSED.value,
+            "answer": None,
+            "reason": "llm_not_configured",
+            "retrieved_count": 0,
+            "llm_invoked": False,
+            "citations": [],
+        }
+
 
 class _IdentityReranker:
     def rerank(self, *, hits: object, **_kwargs: object) -> object:
         return hits
-
-
-class _EvidenceAnswerGenerator:
-    def generate(self, *, evidence: object, **_kwargs: object) -> str:
-        first = tuple(evidence)[0]
-        return first.chunk.text
 
 
 class _AssetScopedSearchIndex:
@@ -166,3 +189,11 @@ class _AssetScopedSearchIndex:
             retrieval_filter=narrowed,
             limit=limit,
         )
+
+
+def _build_default_answer_generator() -> object | None:
+    """Build the RAG real LLM answer generator from the environment."""
+    try:
+        return build_llm_answer_generator(os.environ)
+    except LLMConfigurationError:
+        return None

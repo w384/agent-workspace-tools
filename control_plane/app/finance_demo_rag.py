@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,12 +17,14 @@ from control_plane.app.domain import (
     RuleVersion,
     TrustedActorContext,
 )
+
 from control_plane.app.policy import evaluate_authorization
 from control_plane.app.ports import AssessmentResult
 from control_plane.app.repository import ControlPlaneRepository
 
 from service.app.rag.contracts import (
     ActiveAssetVersion,
+    LLMConfigurationError,
     PermissionContext,
     RetrievalFilter,
 )
@@ -31,12 +34,14 @@ from service.app.rag.finance_matching import (
     FinanceMaterialMatchingService,
     MaterialFact,
     MaterialFactHit,
+    MaterialMatchResult,
     MaterialMatchingScope,
     MaterialRequirement,
     RuleSourceType,
     RuleVersionSnapshot,
 )
 from service.app.rag.index import InMemorySearchIndex
+from service.app.rag.llm import build_llm_explanation_port
 from service.app.rag.ingestion import IngestionRequest
 from service.app.rag.parser_worker import DOCX_MIME_TYPE, PDF_MIME_TYPE
 
@@ -61,11 +66,15 @@ class FinanceDemoRagPort:
         source_root: Path,
         import_manifest_path: Path,
         rules_path: Path,
+        explanation_port: object | None = None,
     ) -> None:
         self._repository = repository
         self._source_root = source_root.resolve()
         self._declared_assets = _load_import_manifest(import_manifest_path)
         self._rules_payload = _load_rules_fixture(rules_path)
+        if explanation_port is None:
+            explanation_port = _build_default_explanation_port()
+        self._explanation_port = explanation_port
         self.indexed_chunk_count = 0
         self.parsed_mime_types: frozenset[str] = frozenset()
 
@@ -119,17 +128,12 @@ class FinanceDemoRagPort:
             session_id=actor.session_id,
             request_id=actor.request_id,
         )
-        result = FinanceMaterialMatchingService(
-            control_plane=_FixedMatchingScope(
-                context=context,
-                active_versions=active_versions,
-                rule_version=rule_snapshot,
-            ),
-            fact_index=_IndexedFacts(index=index, facts=facts),
-        ).match(
+        result = self._match_with_explanation(
             context=context,
-            limit=len(facts),
-            include_explanation=False,
+            facts=facts,
+            index=index,
+            active_versions=active_versions,
+            rule_snapshot=rule_snapshot,
         )
         if result.status is None:
             raise PermissionError("finance demo matching scope denied")
@@ -164,6 +168,35 @@ class FinanceDemoRagPort:
                     for citation in result.rule_citations
                 ]
             ),
+        )
+
+    def _match_with_explanation(
+        self,
+        *,
+        context: PermissionContext,
+        facts: tuple[MaterialFact, ...],
+        index: InMemorySearchIndex,
+        active_versions: tuple[ActiveAssetVersion, ...],
+        rule_snapshot: RuleVersionSnapshot,
+        include_explanation: bool = True,
+    ) -> MaterialMatchResult:
+        if not include_explanation or self._explanation_port is None:
+            explanation_port = None
+            include_explanation = False
+        else:
+            explanation_port = self._explanation_port
+        return FinanceMaterialMatchingService(
+            control_plane=_FixedMatchingScope(
+                context=context,
+                active_versions=active_versions,
+                rule_version=rule_snapshot,
+            ),
+            fact_index=_IndexedFacts(index=index, facts=facts),
+            explanation_port=explanation_port,
+        ).match(
+            context=context,
+            limit=len(facts),
+            include_explanation=include_explanation,
         )
 
     def _require_authorized_active_versions(
@@ -430,3 +463,11 @@ def _mime_type_for(relative_path: str) -> str:
     if relative_path.endswith(".docx"):
         return DOCX_MIME_TYPE
     raise ValueError("finance demo manifest permits PDF/DOCX only")
+
+
+def _build_default_explanation_port() -> object | None:
+    """Build the RAG real LLM explanation port from the environment."""
+    try:
+        return build_llm_explanation_port(os.environ)
+    except LLMConfigurationError:
+        return None
