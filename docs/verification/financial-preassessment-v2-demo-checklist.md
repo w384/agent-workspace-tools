@@ -1,10 +1,12 @@
-# 资料预评估与银行规则匹配 DEMO 可复验基线检查清单
+# 资料预评估与银行规则匹配 DEMO 可复验基线检查清单（统一入口 /demo/ 双路径）
 
-状态：v2 受控金融样例演示可复验基线。仅代表本地受控证据；未提交、未推送、未发布。
+状态：v2 受控金融样例演示可复验基线（统一前端 /demo/ 双路径）。仅代表本地受控证据；未提交、未推送、未发布。
 
 ## 复验命令
 
 专项（受控桥接、规则版本、样例完整性）：
+
+> 说明：真实 LLM 调用验收见下方「路径 B 关键断言」；对应的「真实 LLM 调用」测试待执行端新增（ANSWERED 时 LLM 被调用、DENY 时 LLM 零调用、引用绑定授权证据、凭证不泄前端），test_demo_rag_query.py 对 answer 的精确相等断言需随真实 LLM 输出同步调整，避免把确定性摘录当验收。
 
 ```powershell
 $env:PYTHONDONTWRITEBYTECODE='1'
@@ -43,6 +45,15 @@ git diff --check
 
 ## 关键断言
 
+路径 B（LLM 知识库问答）：
+
+- ANSWERED 回答必须由真实 LLM 依据授权证据生成（草稿/润色），不得退化为确定性 chunk 摘录占位。
+- DENY/REFUSED 时 llm_invoked=false 且 LLM 零调用；DENY 发生在召回、评分、重排、LLM 上下文与引用之前。
+- citations 绑定授权证据（asset_id/asset_version_id/chunk_id/page/paragraph）；LLM 不新增、不越出授权范围引用。
+- LLM 不裁决：只做问答草稿/解释润色，不产出授权结论、最终评分权威、贷款/授信/额度/产品推荐。
+- LLM 凭证（api_key/base_url/model）不出现于前端静态资源、BFF 响应与审计。
+- LLM 失败/超时须有明确降级（fail-closed 或回退确定性摘录），并在响应如实标记，不得伪装为真实 LLM 成功。
+
 正向：
 
 - match_score 为 0-100 整数，不来自规则 JSON 静态展示分数。
@@ -79,6 +90,7 @@ git diff --check
 
 ## 残余风险
 
+- 真实 LLM 接入（AnswerGenerator/ExplanationPort + BFF 桥接）：P0 在途，实施归 RAG 后台 + 控制面，执行总负责统筹验收与集成；演示期使用受控 demo LLM 凭证（脱敏），不落前端、不入库明文。
 - 真实上传自动解析与索引：NOT_DONE。
 - Dify 页面实机解释与 Workflow 追踪：NOT_RUN。
 - Qdrant、真实 PostgreSQL、OS 级无网络/资源隔离 parser sandbox：NOT_DONE。
