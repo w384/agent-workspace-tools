@@ -1,0 +1,30 @@
+{
+  "source_type": "demo_fixture",
+  "scenario": "finance_profile_matching",
+  "assets": [
+    {
+      "relative_path": "客户模拟资料/资料概览与授权说明.docx",
+      "material_key": "customer_profile"
+    },
+    {
+      "relative_path": "客户模拟资料/收入情况说明.pdf",
+      "material_key": "income_statement"
+    },
+    {
+      "relative_path": "客户模拟资料/资金流摘要.pdf",
+      "material_key": "cashflow_summary"
+    },
+    {
+      "relative_path": "客户模拟资料/资产负债说明.docx",
+      "material_key": "asset_liability_statement"
+    },
+    {
+      "relative_path": "客户模拟资料/经营情况说明.docx",
+      "material_key": "business_profile"
+    },
+    {
+      "relative_path": "客户模拟资料/补充材料清单.pdf",
+      "material_key": "supplement_material_list"
+    }
+  ]
+}

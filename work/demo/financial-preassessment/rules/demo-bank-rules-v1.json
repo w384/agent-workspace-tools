@@ -1,0 +1,72 @@
+{
+  "source_type": "demo_fixture",
+  "scenario": "finance_profile_matching",
+  "rule_set_name": "演示银行规则样例",
+  "assessment_rule_id": "demo-bank-a-complete",
+  "version_label": "demo-2026-08-14",
+  "disclaimer": "仅供资料完整度与规则匹配演示参考，不参与贷款申请、审批、授信、额度测算或金融产品销售。",
+  "rules": [
+    {
+      "rule_id": "demo-bank-a-complete",
+      "bank_label": "示例银行A",
+      "result_level": "MATCH",
+      "requirements": [
+        {
+          "rule_id": "demo-bank-a-income",
+          "material_key": "income_statement",
+          "label": "收入情况说明"
+        },
+        {
+          "rule_id": "demo-bank-a-cashflow",
+          "material_key": "cashflow_summary",
+          "label": "资金流摘要"
+        },
+        {
+          "rule_id": "demo-bank-a-assets",
+          "material_key": "asset_liability_statement",
+          "label": "资产负债说明"
+        }
+      ]
+    },
+    {
+      "rule_id": "demo-bank-b-supplement",
+      "bank_label": "示例银行B",
+      "result_level": "POSSIBLE",
+      "requirements": [
+        {
+          "rule_id": "demo-bank-b-income",
+          "material_key": "income_statement",
+          "label": "收入情况说明"
+        },
+        {
+          "rule_id": "demo-bank-b-business",
+          "material_key": "business_profile",
+          "label": "经营情况说明"
+        },
+        {
+          "rule_id": "demo-bank-b-supplement",
+          "material_key": "supplement_material_list",
+          "label": "补充材料清单"
+        }
+      ]
+    },
+    {
+      "rule_id": "demo-bank-c-history",
+      "bank_label": "示例银行C",
+      "result_level": "NOT_MATCH",
+      "requirements": [
+        {
+          "rule_id": "demo-bank-c-history",
+          "material_key": "two_year_business_history",
+          "label": "连续两年经营证明"
+        },
+        {
+          "rule_id": "demo-bank-c-license",
+          "material_key": "external_qualification",
+          "label": "可核验的外部资质说明"
+        }
+      ]
+    }
+  ],
+  "content_fingerprint": "sha256:4ec896850429e7d5edd3d8a943698a1eca0285e4c88c0720ae66e3a78a5e8b40"
+}
