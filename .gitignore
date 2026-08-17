@@ -12,4 +12,5 @@ plugin/.env
 *.difypkg
 work/windows-service/secrets/
 work/e2e/
+work/demo/public-drive-ai-organizing/
 
