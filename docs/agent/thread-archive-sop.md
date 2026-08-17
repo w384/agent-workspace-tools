@@ -55,7 +55,7 @@ frozen-v2-integration-contract.md + 共享交接包中你的章节。
 
 > 注：曾考虑 handoff_thread 迁移保对话，经查证该命令在当前环境不存在（Codex Desktop 无此功能）。所有 worktree 线程统一走"归档 → git worktree 重建 → 新线程重开"。
 
-- 操作（在主 checkout `D:\AI\Codex\Projects\dify-agent-workspace-tools` 执行）：
+- 操作（在主 checkout `D:\AI\Codex\Projects\agent-workspace-tools` 执行）：
   1. 归档旧线程（阶段 2）后，删除跑偏 worktree：`git worktree remove D:\AI\Worktree\a904\...`
   2. 重建标准 worktree：`git worktree add D:\AI\Codex\Worktree\<branch-name> <branch>`
 - 验证清单：
