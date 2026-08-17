@@ -15,7 +15,7 @@
 
 鍛戒护锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_schema.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_schema.py -q -p no:cacheprovider
 ```
 
 鍘熷鎽樿锛歚2 failed, 17 passed in 0.07s`銆傚け璐ョ‘璁?`transition_asset_version(..., 'ready')` 鑷姩璋冪敤 active 鍒囨崲锛氶涓?ready 鐗堟湰鍦ㄦ湭鏄惧紡婵€娲绘椂閿欒鎴愪负 active锛宺eady 鐨?v2 涔熼敊璇浛鎹㈠凡鏄惧紡婵€娲荤殑 v1銆?
@@ -23,7 +23,7 @@
 
 鍛戒护锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_schema.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_schema.py -q -p no:cacheprovider
 git diff --check -- control_plane
 ```
 

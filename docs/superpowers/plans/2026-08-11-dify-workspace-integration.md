@@ -994,9 +994,9 @@ Expected: FAIL because deployment files are absent.
   <id>DifyAgentWorkspaceTools</id>
   <name>Dify Agent Workspace Tools</name>
   <description>受 Dify 调用的本机安全文件服务</description>
-  <executable>D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe</executable>
+  <executable>D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe</executable>
   <arguments>-m uvicorn service.app.main:app --host 0.0.0.0 --port 8787</arguments>
-  <workingdirectory>D:\AI\Codex\Projects\dify-agent-workspace-tools</workingdirectory>
+  <workingdirectory>D:\AI\Codex\Projects\agent-workspace-tools</workingdirectory>
   <serviceaccount>
     <username>NT AUTHORITY\LocalService</username>
     <allowservicelogon>true</allowservicelogon>

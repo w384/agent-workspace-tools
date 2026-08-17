@@ -2,7 +2,7 @@
 
 日期：2026-08-11  
 状态：待用户审阅  
-项目：`dify-agent-workspace-tools`
+项目：`agent-workspace-tools`
 
 ## 1. 目标
 
@@ -17,7 +17,7 @@
 - 本机服务：FastAPI，现有 12 个路由，其中 `/health` 为公开健康检查，其余接口受 `X-API-Key` 保护。
 - 本机服务测试：现有 56 项测试通过，后续改动不得破坏这些测试。
 - 工作区根目录：`D:\AI\AgentWorkspace`。
-- 项目目录：`D:\AI\Codex\Projects\dify-agent-workspace-tools`。
+- 项目目录：`D:\AI\Codex\Projects\agent-workspace-tools`。
 
 ## 3. 范围
 
@@ -72,7 +72,7 @@ D:\AI\AgentWorkspace
 插件放在：
 
 ```text
-D:\AI\Codex\Projects\dify-agent-workspace-tools\plugin
+D:\AI\Codex\Projects\agent-workspace-tools\plugin
 ```
 
 插件和 `service` 使用彼此独立的依赖文件与虚拟环境。插件内部设置一个共享 `WorkspaceClient`，统一负责：

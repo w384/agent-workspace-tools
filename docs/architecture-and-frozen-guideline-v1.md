@@ -31,7 +31,7 @@
 
 ### 3.1 2026-08-13 当前重新核验
 
-以下事实来自对主项目目录 `D:\AI\Codex\Projects\dify-agent-workspace-tools` 的只读核验，不等同于本规划 worktree 的即时运行结果：
+以下事实来自对主项目目录 `D:\AI\Codex\Projects\agent-workspace-tools` 的只读核验，不等同于本规划 worktree 的即时运行结果：
 
 - Git 位于 `main`，HEAD 为 `29a8b2c`，标签 `v0.0.4` 指向该提交。
 - 工作树有 28 项未提交变更：14 个已跟踪文件修改、14 个未跟踪路径或文件，无 staged 变更。

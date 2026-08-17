@@ -63,7 +63,7 @@ confirm_and_execute(actor, plan_id, expected_plan_hash, asset_snapshots,
 ## TDD 涓庨獙璇?
 鍏堝啓娴嬭瘯骞跺疄闄呰幏寰?RED锛屽啀鍐欐渶灏?GREEN锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py control_plane\tests\test_approval.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py control_plane\tests\test_approval.py -q -p no:cacheprovider
 ```
 
 瀹屾垚鍚庡璺戝叏閮?`control_plane/tests`锛屾墽琛?`git diff --check -- control_plane`锛屽苟鎶?RED/GREEN 鍘熷鎽樿銆佹枃浠舵竻鍗曘€佽嚜瀹°€佺湡瀹?PostgreSQL 鏈獙璇侀闄╁啓鍏?`task-3-report.md`銆?

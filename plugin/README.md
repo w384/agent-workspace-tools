@@ -22,7 +22,7 @@ The plugin only bridges requests to the local service. It does not receive arbit
 
 ## Requirements
 
-- A Windows FastAPI service running `dify-agent-workspace-tools`.
+- A Windows FastAPI service running `agent-workspace-tools`.
 - A configured workspace root on the Windows host.
 - Dify running in Docker Desktop or another environment that can reach the host service.
 - The provider API key configured in Dify.

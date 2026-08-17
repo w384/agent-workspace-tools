@@ -206,7 +206,7 @@ def create_app(
     def health() -> dict[str, str]:
         return {
             "status": "ok",
-            "service": "dify-agent-workspace-tools",
+            "service": "agent-workspace-tools",
         }
 
     @application.get("/files")

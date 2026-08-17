@@ -38,7 +38,7 @@ Tests and work records:
 Initial Task3 RED:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py control_plane\tests\test_approval.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py control_plane\tests\test_approval.py -q -p no:cacheprovider
 ```
 
 Result:
@@ -57,7 +57,7 @@ The failure was expected because the canonical hash value object did not exist y
 Task3 slice:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py control_plane\tests\test_approval.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py control_plane\tests\test_approval.py -q -p no:cacheprovider
 ```
 
 Result:
@@ -70,7 +70,7 @@ exit 0
 Scoped full control-plane regression:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests -q -p no:cacheprovider
 ```
 
 Result:
@@ -85,7 +85,7 @@ exit 0
 Review RED:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py::test_confirm_revalidates_expiry_context_acl_and_active_snapshot_before_execution control_plane\tests\test_gate2_plans.py::test_executor_exception_or_non_completed_result_fails_job_without_false_completion control_plane\tests\test_gate2_plans.py::test_confirm_fails_closed_for_non_creator_session control_plane\tests\test_approval.py::test_high_risk_creates_pending_approval_only_after_creator_confirms -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py::test_confirm_revalidates_expiry_context_acl_and_active_snapshot_before_execution control_plane\tests\test_gate2_plans.py::test_executor_exception_or_non_completed_result_fails_job_without_false_completion control_plane\tests\test_gate2_plans.py::test_confirm_fails_closed_for_non_creator_session control_plane\tests\test_approval.py::test_high_risk_creates_pending_approval_only_after_creator_confirms -q -p no:cacheprovider
 ```
 
 Result:
@@ -100,7 +100,7 @@ Failure causes were expected: expired plans still executed, executor exceptions 
 Additional RED:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py::test_service_uses_repository_protocol_methods_for_confirmation_and_approval_state control_plane\tests\test_approval.py::test_approver_role_id_is_injected_configuration -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py::test_service_uses_repository_protocol_methods_for_confirmation_and_approval_state control_plane\tests\test_approval.py::test_approver_role_id_is_injected_configuration -q -p no:cacheprovider
 ```
 
 Result:
@@ -115,7 +115,7 @@ Failure causes were expected: `ControlPlaneRepository` lacked explicit confirmat
 Fix round GREEN:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py::test_confirm_revalidates_expiry_context_acl_and_active_snapshot_before_execution control_plane\tests\test_gate2_plans.py::test_executor_exception_or_non_completed_result_fails_job_without_false_completion control_plane\tests\test_gate2_plans.py::test_confirm_fails_closed_for_non_creator_session control_plane\tests\test_gate2_plans.py::test_service_uses_repository_protocol_methods_for_confirmation_and_approval_state control_plane\tests\test_approval.py::test_high_risk_creates_pending_approval_only_after_creator_confirms control_plane\tests\test_approval.py::test_approver_role_id_is_injected_configuration -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py::test_confirm_revalidates_expiry_context_acl_and_active_snapshot_before_execution control_plane\tests\test_gate2_plans.py::test_executor_exception_or_non_completed_result_fails_job_without_false_completion control_plane\tests\test_gate2_plans.py::test_confirm_fails_closed_for_non_creator_session control_plane\tests\test_gate2_plans.py::test_service_uses_repository_protocol_methods_for_confirmation_and_approval_state control_plane\tests\test_approval.py::test_high_risk_creates_pending_approval_only_after_creator_confirms control_plane\tests\test_approval.py::test_approver_role_id_is_injected_configuration -q -p no:cacheprovider
 ```
 
 Result:
@@ -128,7 +128,7 @@ exit 0
 Latest Task3 slice:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py control_plane\tests\test_approval.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py control_plane\tests\test_approval.py -q -p no:cacheprovider
 ```
 
 Result:
@@ -141,7 +141,7 @@ exit 0
 Latest scoped full control-plane regression:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests -q -p no:cacheprovider
 ```
 
 Result:
@@ -156,7 +156,7 @@ exit 0
 Review RED:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_approval.py::test_configured_non_initiator_approver_executes_after_approval control_plane\tests\test_approval.py::test_approver_role_grant_cannot_replace_requester_file_grant control_plane\tests\test_gate2_plans.py::test_missing_active_snapshot_fails_closed_instead_of_500 -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_approval.py::test_configured_non_initiator_approver_executes_after_approval control_plane\tests\test_approval.py::test_approver_role_grant_cannot_replace_requester_file_grant control_plane\tests\test_gate2_plans.py::test_missing_active_snapshot_fails_closed_instead_of_500 -q -p no:cacheprovider
 ```
 
 Result:
@@ -171,7 +171,7 @@ Failure causes were expected: approval execution sent B to the executor, B appro
 Fix round GREEN:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_approval.py::test_configured_non_initiator_approver_executes_after_approval control_plane\tests\test_approval.py::test_approver_role_grant_cannot_replace_requester_file_grant control_plane\tests\test_gate2_plans.py::test_missing_active_snapshot_fails_closed_instead_of_500 -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_approval.py::test_configured_non_initiator_approver_executes_after_approval control_plane\tests\test_approval.py::test_approver_role_grant_cannot_replace_requester_file_grant control_plane\tests\test_gate2_plans.py::test_missing_active_snapshot_fails_closed_instead_of_500 -q -p no:cacheprovider
 ```
 
 Result:
@@ -184,7 +184,7 @@ exit 0
 Latest Task3 slice:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py control_plane\tests\test_approval.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py control_plane\tests\test_approval.py -q -p no:cacheprovider
 ```
 
 Result:
@@ -197,7 +197,7 @@ exit 0
 Latest scoped full control-plane regression:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests -q -p no:cacheprovider
 ```
 
 Result:
@@ -212,7 +212,7 @@ exit 0
 Review RED:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_approval.py::test_same_role_approver_from_another_workspace_cannot_list_or_decide_approval -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_approval.py::test_same_role_approver_from_another_workspace_cannot_list_or_decide_approval -q -p no:cacheprovider
 ```
 
 Result:
@@ -227,7 +227,7 @@ The failure was expected: a `workspace-b` actor with the same opaque approver ro
 Fix round GREEN:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_approval.py::test_same_role_approver_from_another_workspace_cannot_list_or_decide_approval -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_approval.py::test_same_role_approver_from_another_workspace_cannot_list_or_decide_approval -q -p no:cacheprovider
 ```
 
 Result:
@@ -240,7 +240,7 @@ exit 0
 Latest Task3 slice:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py control_plane\tests\test_approval.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate2_plans.py control_plane\tests\test_approval.py -q -p no:cacheprovider
 ```
 
 Result:
@@ -253,7 +253,7 @@ exit 0
 Latest scoped full control-plane regression:
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests -q -p no:cacheprovider
 ```
 
 Result:

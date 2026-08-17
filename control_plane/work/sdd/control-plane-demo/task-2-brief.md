@@ -19,7 +19,7 @@
 ## TDD 涓庨獙璇?
 1. 鍏堝啓娴嬭瘯骞跺疄闄呰繍琛岋紝纭鍥犳ā鍧?璺敱缂哄け鑰?RED锛涙妸鍛戒护鍜屾憳瑕佸啓鎶ュ憡銆?2. 鍐嶅啓鏈€灏忓疄鐜帮紝杩愯锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_schema.py control_plane\tests\test_session_boundary.py control_plane\tests\test_gate1_upload.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_schema.py control_plane\tests\test_session_boundary.py control_plane\tests\test_gate1_upload.py -q -p no:cacheprovider
 ```
 
 3. 鍐?`control_plane/work/sdd/control-plane-demo/task-2-report.md`锛屽惈 RED/GREEN 鍘熷鎽樿銆佹枃浠舵竻鍗曘€佽嚜瀹°€佹湭楠岃瘉椤广€?4. 鍙敼 `control_plane/**`锛屼笉瀹夎銆佷笉鎻愪氦銆佷笉鎺ㄩ€併€佷笉璁块棶鐪熷疄鍏叡鐩橈紱閫愭枃浠跺啓涓枃 `project-changes.log`銆?

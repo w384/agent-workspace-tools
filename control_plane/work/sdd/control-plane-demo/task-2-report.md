@@ -18,88 +18,88 @@ Task 2 宸叉寜鏈€鏂?Gate1 瑁佸喅瀹屾垚骞堕€氳繃 scoped 鍏ㄩ�
 
 鍒濆 Task2 RED锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_session_boundary.py control_plane\tests\test_gate1_upload.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_session_boundary.py control_plane\tests\test_gate1_upload.py -q -p no:cacheprovider
 ```
 
 缁撴灉锛氶€€鍑虹爜 `1`锛沗ModuleNotFoundError: No module named 'control_plane.app.main'`銆?
 鍒濆 Task2 GREEN锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_schema.py control_plane\tests\test_session_boundary.py control_plane\tests\test_gate1_upload.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_schema.py control_plane\tests\test_session_boundary.py control_plane\tests\test_gate1_upload.py -q -p no:cacheprovider
 ```
 
 缁撴灉锛歚34 passed in 0.20s`锛涚嫭绔嬪璺戞浘寰楀埌 `34 passed in 0.16s`銆?
 Fix A RED - ACL DENY 蹇呴』鍐欒劚鏁忓璁★細
 
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_denied_upload_has_no_executor_rag_asset_or_version_side_effect control_plane\tests\test_gate1_upload.py::test_denied_upload_audit_never_retains_the_unauthorized_full_path -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_denied_upload_has_no_executor_rag_asset_or_version_side_effect control_plane\tests\test_gate1_upload.py::test_denied_upload_audit_never_retains_the_unauthorized_full_path -q -p no:cacheprovider
 ```
 
 缁撴灉锛氶€€鍑虹爜 `1`锛沗2 failed in 0.11s`锛涘け璐ョ偣涓?DENY 瀹¤浜嬩欢涓嶅瓨鍦ㄣ€?
 Fix A GREEN锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_denied_upload_has_no_executor_rag_asset_or_version_side_effect control_plane\tests\test_gate1_upload.py::test_denied_upload_audit_never_retains_the_unauthorized_full_path -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_denied_upload_has_no_executor_rag_asset_or_version_side_effect control_plane\tests\test_gate1_upload.py::test_denied_upload_audit_never_retains_the_unauthorized_full_path -q -p no:cacheprovider
 ```
 
 缁撴灉锛歚2 passed in 0.07s`銆?
 Fix B RED - 閲嶅缓 service 鍚?callback 浠嶆仮澶?request/run/actor锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_rebuilt_service_restores_callback_request_run_and_actor_from_persisted_audit -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_rebuilt_service_restores_callback_request_run_and_actor_from_persisted_audit -q -p no:cacheprovider
 ```
 
 缁撴灉锛氶€€鍑虹爜 `1`锛沗1 failed in 0.10s`锛涘け璐ョ偣涓?repository 缂哄皯鎸佷箙瀹¤鏌ヨ鎺ュ彛銆?
 Fix B GREEN锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_rebuilt_service_restores_callback_request_run_and_actor_from_persisted_audit control_plane\tests\test_gate1_upload.py::test_index_chain_records_correlated_audit_without_implicit_activation_and_failed_v2_keeps_v1 -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_rebuilt_service_restores_callback_request_run_and_actor_from_persisted_audit control_plane\tests\test_gate1_upload.py::test_index_chain_records_correlated_audit_without_implicit_activation_and_failed_v2_keeps_v1 -q -p no:cacheprovider
 ```
 
 缁撴灉锛歚2 passed in 0.07s`銆?
 Fix C RED - `TrustedActorContext` 蹇呭～鍏宠仈瀛楁锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py::test_trusted_actor_context_rejects_empty_trusted_correlation_fields -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py::test_trusted_actor_context_rejects_empty_trusted_correlation_fields -q -p no:cacheprovider
 ```
 
 缁撴灉锛氶€€鍑虹爜 `1`锛沗4 failed in 0.07s`锛涚┖ `session_id/request_id/run_id/role_ids` 鏈嫆缁濄€?
 Fix C GREEN 涓?Task1 鍥炲綊锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_session_boundary.py -q -p no:cacheprovider
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_schema.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_session_boundary.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_schema.py -q -p no:cacheprovider
 ```
 
 缁撴灉锛氬垎鍒负 `24 passed in 0.09s`銆乣23 passed in 0.04s`銆?
 Fix D RED - validation/executor/RAG 缁撴瀯鍖栭敊璇笌澶辫触瀹¤锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_session_boundary.py::test_request_validation_errors_use_unified_error_envelope control_plane\tests\test_gate1_upload.py::test_executor_exception_returns_safe_error_and_appends_sanitized_failure_audit control_plane\tests\test_gate1_upload.py::test_rag_exception_fails_queued_version_and_returns_safe_correlated_error -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_session_boundary.py::test_request_validation_errors_use_unified_error_envelope control_plane\tests\test_gate1_upload.py::test_executor_exception_returns_safe_error_and_appends_sanitized_failure_audit control_plane\tests\test_gate1_upload.py::test_rag_exception_fails_queued_version_and_returns_safe_correlated_error -q -p no:cacheprovider
 ```
 
 缁撴灉锛氶€€鍑虹爜 `1`锛沗3 failed in 0.13s`锛泇alidation 浠嶄负 FastAPI 榛樿 `detail`锛宔xecutor/RAG 寮傚父浠嶈繑鍥炴鏋?500銆?
 Fix D GREEN锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_session_boundary.py::test_request_validation_errors_use_unified_error_envelope control_plane\tests\test_gate1_upload.py::test_executor_exception_returns_safe_error_and_appends_sanitized_failure_audit control_plane\tests\test_gate1_upload.py::test_rag_exception_fails_queued_version_and_returns_safe_correlated_error -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_session_boundary.py::test_request_validation_errors_use_unified_error_envelope control_plane\tests\test_gate1_upload.py::test_executor_exception_returns_safe_error_and_appends_sanitized_failure_audit control_plane\tests\test_gate1_upload.py::test_rag_exception_fails_queued_version_and_returns_safe_correlated_error -q -p no:cacheprovider
 ```
 
 缁撴灉锛歚3 passed in 0.08s`銆?
 Fix E/Gate1 RED - 宸茬煡鍚岃矾寰?DENY 涓庢墽琛屽櫒鐩爣鍐茬獊 409锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_known_asset_path_is_denied_before_executor_without_a_new_version control_plane\tests\test_gate1_upload.py::test_executor_target_conflict_maps_to_stable_conflict_without_asset_version -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_known_asset_path_is_denied_before_executor_without_a_new_version control_plane\tests\test_gate1_upload.py::test_executor_target_conflict_maps_to_stable_conflict_without_asset_version -q -p no:cacheprovider
 ```
 
 缁撴灉锛氶€€鍑虹爜 `1`锛沗2 failed in 0.12s`锛涘凡鐭ュ悓璺緞浠嶈蛋鎴愬姛涓婁紶锛屾墽琛屽櫒 `FileExistsError` 浠嶆槧灏勪负閫氱敤 502銆?
 Fix E/Gate1 GREEN锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_known_asset_path_is_denied_before_executor_without_a_new_version control_plane\tests\test_gate1_upload.py::test_executor_target_conflict_maps_to_stable_conflict_without_asset_version -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_known_asset_path_is_denied_before_executor_without_a_new_version control_plane\tests\test_gate1_upload.py::test_executor_target_conflict_maps_to_stable_conflict_without_asset_version -q -p no:cacheprovider
 ```
 
 缁撴灉锛歚2 passed in 0.07s`銆?
 Fix E 鍥炲綊璋冩暣 - 涓嶅啀鐢ㄩ噸澶嶄笂浼犳瀯閫?v2锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_index_chain_records_correlated_audit_without_implicit_activation_and_failed_v2_keeps_v1 -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_gate1_upload.py::test_index_chain_records_correlated_audit_without_implicit_activation_and_failed_v2_keeps_v1 -q -p no:cacheprovider
 ```
 
 缁撴灉锛歚1 passed in 0.06s`銆?
 ## 鏈€缁堥獙璇?
 scoped 鍏ㄩ噺锛?
 ```powershell
-& 'D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_schema.py control_plane\tests\test_session_boundary.py control_plane\tests\test_gate1_upload.py -q -p no:cacheprovider
+& 'D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe' -B -m pytest control_plane\tests\test_policy.py control_plane\tests\test_schema.py control_plane\tests\test_session_boundary.py control_plane\tests\test_gate1_upload.py -q -p no:cacheprovider
 ```
 
 缁撴灉锛?

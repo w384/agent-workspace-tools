@@ -2,7 +2,7 @@
 param()
 
 $ErrorActionPreference = "Stop"
-$taskName = "DifyAgentWorkspaceTools"
+$taskName = "AgentWorkspaceTools"
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 
 if ($null -ne $task) {

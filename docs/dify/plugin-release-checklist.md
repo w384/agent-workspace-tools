@@ -17,7 +17,7 @@
    ```
 
 6. 将产物复制到既有 E2E 安装包目录：
-   `D:\AI\Codex\Worktree\dify-agent-workspace-tools-dify-integration\work\e2e`
+   `D:\AI\Codex\Documents\2026-08-16-dify-integration-worktree-backup\e2e`
 7. 文件名必须包含插件版本，并沿用历史命名规范：
    `local-workspace-tools-permission-demo-<version>.difypkg`
 8. 对最终安装包复核：manifest 两处版本一致、README 版本一致、无真实 API Key、无 `.env`（允许 `.env.example`）、无无关敏感文件。
@@ -26,4 +26,4 @@
 
 当前标准产物示例：
 
-`D:\AI\Codex\Worktree\dify-agent-workspace-tools-dify-integration\work\e2e\local-workspace-tools-permission-demo-0.0.6.difypkg`
+`D:\AI\Codex\Documents\2026-08-16-dify-integration-worktree-backup\e2e\local-workspace-tools-permission-demo-0.0.6.difypkg`

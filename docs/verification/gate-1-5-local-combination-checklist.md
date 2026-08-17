@@ -4,8 +4,8 @@
 
 ## 复验边界与当前工作树
 
-- 工作目录：`D:\AI\Codex\Projects\dify-agent-workspace-tools`。
-- 复验解释器：`D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe`。
+- 工作目录：`D:\AI\Codex\Projects\agent-workspace-tools`。
+- 复验解释器：`D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe`。
 - 最近完整回归（2026-08-13）：`service/tests + control_plane/tests` 为 `180 passed in 2.18s`；`plugin/tests` 为 `103 passed in 1.94s`，含 2 个既有第三方警告；`git diff --check` 退出码为 0，仅打印既有 LF/CRLF 转换警告。
 - 当前提交状态：未暂存、未提交、未推送、未发布。最近核对的 porcelain 为 48 条（目录聚合），`staged=0`，`git ls-files --others --exclude-standard` 为 64 个未跟踪文件；不得把本清单误读为干净工作树或发布候选。
 - 所有测试均使用临时目录、内存控制面或可重建索引副本；未访问 `D:\AI\AgentWorkspace` 真实公共盘，未改变 Windows/SMB ACL。

@@ -32,7 +32,7 @@ def test_start_script_defines_safe_service_runtime() -> None:
 def test_install_script_registers_one_logon_task_without_secret_value() -> None:
     script = (SCRIPTS_DIR / "install-auto-start.ps1").read_text(encoding="utf-8")
 
-    assert '$taskName = "DifyAgentWorkspaceTools"' in script
+    assert '$taskName = "AgentWorkspaceTools"' in script
     assert "New-ScheduledTaskAction" in script
     assert "New-ScheduledTaskTrigger -AtLogOn" in script
     assert "New-ScheduledTaskSettingsSet" in script
@@ -49,7 +49,7 @@ def test_uninstall_script_removes_only_the_fixed_task() -> None:
         encoding="utf-8"
     )
 
-    assert '$taskName = "DifyAgentWorkspaceTools"' in script
+    assert '$taskName = "AgentWorkspaceTools"' in script
     assert "Get-ScheduledTask -TaskName $taskName" in script
     assert "Unregister-ScheduledTask" in script
     assert "-Confirm:$false" in script

@@ -17,5 +17,5 @@ def test_health_endpoint_returns_service_status():
     assert response.status_code == 200
     assert response.json() == {
         "status": "ok",
-        "service": "dify-agent-workspace-tools",
+        "service": "agent-workspace-tools",
     }

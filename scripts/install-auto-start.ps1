@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$taskName = "DifyAgentWorkspaceTools"
+$taskName = "AgentWorkspaceTools"
 $startScript = Join-Path $PSScriptRoot "start-service.ps1"
 
 foreach ($requiredPath in @($startScript, $ApiKeyFile)) {
@@ -23,7 +23,7 @@ $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RestartInterval (New-TimeSpan -Minutes 1) -RestartCount 3 -ExecutionTimeLimit (New-TimeSpan -Days 1)
 $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
-$task = New-ScheduledTask -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Start Dify Agent Workspace Tools after user logon."
+$task = New-ScheduledTask -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Start Agent Workspace Tools after user logon."
 
 Register-ScheduledTask -TaskName $taskName -InputObject $task -Force | Out-Null
 Write-Output "Scheduled task '$taskName' is installed for $currentUser."

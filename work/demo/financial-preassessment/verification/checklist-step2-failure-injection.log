@@ -1,6 +1,6 @@
 ============================= test session starts =============================
-platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0 -- D:\AI\Codex\Projects\dify-agent-workspace-tools\service\.venv\Scripts\python.exe
-rootdir: D:\AI\Codex\Projects\dify-agent-workspace-tools
+platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0 -- D:\AI\Codex\Projects\agent-workspace-tools\service\.venv\Scripts\python.exe
+rootdir: D:\AI\Codex\Projects\agent-workspace-tools
 plugins: anyio-4.14.2
 collecting ... collected 7 items
 
