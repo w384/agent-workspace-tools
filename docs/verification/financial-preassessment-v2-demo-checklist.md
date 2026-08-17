@@ -35,6 +35,13 @@ git diff --check
 - 插件：103 passed in 2.09s（2 条既有第三方 warning：gevent MonkeyPatch、Pydantic 弃用）。
 - git diff --check：exit 0，仅有既有 LF 转 CRLF warning。
 
+## 实际结果（2026-08-17~18 实测 · Gate V2-5 最终证据）
+
+- RAG LLM 测试：20 passed（真实 LLM 输出、DENY 零调用、citations 版本化绑定、LLM 不裁决、凭证不泄、失败 fail-closed）。
+- 控制面全量：93 passed（须提权运行；沙盒内 pytest tmp_path 报 PermissionError [WinError 5]，已清理 work\.pytest-tmp）。
+- 服务端全量：146 passed（2026-08-18 提权回归；原 144+2 的 2 failed 已由任务 B 修复，全绿）。
+- git diff --check：exit 0，仅有既有 LF 转 CRLF warning。
+
 ## 演示自检/重置验证记录（2026-08-14 执行）
 
 按本清单执行样例完整性、失败注入与重置复跑，日志证据位于 work/demo/financial-preassessment/verification/：
