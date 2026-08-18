@@ -272,12 +272,14 @@
     });
     status.className = "file-status file-status-ok";
     status.textContent =
-      "已识别 " + files.length + " 个受控样例：" + selected.join("、") + "。选中即自动发起。";
+      "已识别 " + files.length + " 个受控样例：" + selected.join("、") +
+      (isQa ? "。点击「提问」开始分析。" : "。选中即自动发起。");
     if (note) note.classList.remove("hidden");
-    // 选中即自动发起：按区块分发
-    if (isQa) {
-      ask();
-    } else {
+    const names = files.map((file) => file.name);
+    const hiddenField = isQa ? $('[name="file_name"]') : $('[name="file_names"]');
+    if (hiddenField) hiddenField.value = names.join(",");
+    // 评估区：选中即自动发起；问答区：点击「提问」后开始分析
+    if (!isQa) {
       assess();
     }
   }
@@ -288,9 +290,12 @@
       ? new FormData(event.currentTarget)
       : new FormData($("#assessment-form"));
     const result = $("#assessment-result");
-    const fileNames = collectControlledFileNames($("#demo-file-picker"));
+    const hiddenNames = $('[name="file_names"]');
+    const fileNames = hiddenNames && hiddenNames.value
+      ? hiddenNames.value.split(",").filter(Boolean)
+      : collectControlledFileNames($("#demo-file-picker"));
     if (!fileNames.length) {
-      renderError("请先选择受控样例文件（资产 ID 已对演示隐藏，选择文件即自动发起）。");
+      renderError("请先选择受控样例文件（资产 ID 已对演示隐藏）。");
       return;
     }
     result.replaceChildren(el("p", "report-empty", "正在生成预评估报告…"));
@@ -318,10 +323,13 @@
       ? new FormData(event.currentTarget)
       : new FormData($("#qa-form"));
     const result = $("#qa-result");
-    const fileNames = collectControlledFileNames($("#qa-file-picker"));
+    const hiddenFile = $('[name="file_name"]');
+    const fileNames = hiddenFile && hiddenFile.value
+      ? hiddenFile.value.split(",").filter(Boolean)
+      : collectControlledFileNames($("#qa-file-picker"));
     if (!fileNames.length) {
       result.replaceChildren(
-        el("p", "report-error", "请先选择受控样例文件（资产 ID 已对演示隐藏，选择文件即自动发起）。")
+        el("p", "report-error", "请先选择受控样例文件（资产 ID 已对演示隐藏）。")
       );
       return;
     }

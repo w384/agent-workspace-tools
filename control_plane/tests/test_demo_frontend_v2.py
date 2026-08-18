@@ -66,6 +66,7 @@ def test_demo_frontend_p1_bff_endpoints_used(client) -> None:
     assert "/api/controlled-sample/query" in app_js
     # auto-trigger wording
     assert "选中即自动发起" in app_js
+    assert "点击「提问」开始分析" in app_js
     # old hand-typed asset id flow is gone
     assert "asset_ids" not in app_js
     assert "rule_version_id" not in app_js
@@ -77,3 +78,10 @@ def test_demo_frontend_p1_no_rule_creation_ui(client) -> None:
     app_js = _body(client, "/demo/app.js")
     assert "createRuleVersion" not in app_js
     assert "rule-sets" not in app_js
+
+def test_demo_frontend_p1_scenario_hidden(client) -> None:
+    index = _body(client, "/demo/")
+    # scenario / query_subject are fixed for the demo; visible inputs removed
+    assert '<input type="hidden" name="scenario"' in index
+    assert '<input type="hidden" name="query_subject"' in index
+    assert 'name="asset_ids"' not in index

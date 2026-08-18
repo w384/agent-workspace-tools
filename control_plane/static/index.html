@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>资料预评估与知识库问答 DEMO</title>
+    <title>资料预评估与知识库问答</title>
     <link rel="stylesheet" href="/demo/style.css" />
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
-        <h1>资料预评估与知识库问答 DEMO</h1>
+        <h1>资料预评估与知识库问答</h1>
         <p class="subtitle">统一演示入口：控制面负责身份、权限、报告与审计权威</p>
       </header>
 
@@ -40,14 +40,8 @@
           <p>确定性匹配结果 + 版本化引用 + 免责声明；不构成贷款、授信或金融产品结论。</p>
           <form id="assessment-form">
             <input type="hidden" name="file_names" value="" />
-            <label>
-              场景 scenario
-              <input name="scenario" value="finance_profile_matching" />
-            </label>
-            <label>
-              查询主体 query_subject
-              <input name="query_subject" value="customer-demo-001" />
-            </label>
+            <input type="hidden" name="scenario" value="finance_profile_matching" />
+            <input type="hidden" name="query_subject" value="customer-demo-001" />
 
 
 
@@ -91,7 +85,7 @@
             <div class="file-picker">
             <h3>受控文件选择（知识库问答）</h3>
             <p class="muted">
-              选择 import-manifest 受控样例文件，选中后自动发起问答。
+              选择 import-manifest 受控样例文件，然后点击「提问」开始分析。
             </p>
             <input id="qa-file-picker" type="file" accept=".pdf,.docx" multiple />
             <p id="qa-file-picker-status" class="file-status">未选择文件。</p>
