@@ -153,6 +153,66 @@
     area.appendChild(card);
   }
 
+  function renderQaResult(payload) {
+    const area = $("#qa-result");
+    area.replaceChildren();
+    const status = payload.status || "UNKNOWN";
+    if (status === "ANSWERED") {
+      const card = el("div", "report-card");
+      card.appendChild(el("h3", "qa-title", "问答回答"));
+      card.appendChild(
+        renderKeyValue([
+          ["LLM 调用", "已调用（真实模型生成）"],
+          ["引用证据", String((payload.citations || []).length) + " 条"],
+        ])
+      );
+      const answer = payload.answer || "（模型未返回回答文本）";
+      card.appendChild(el("p", "qa-answer", answer));
+      const citations = payload.citations || [];
+      if (citations.length) {
+        const list = el("ul", "citations");
+        citations.forEach((citation, index) => {
+          list.appendChild(renderCitation(citation, index));
+        });
+        card.appendChild(list);
+      }
+      card.appendChild(el("p", "disclaimer", BANK_LABEL_DISCLAIMER));
+      area.appendChild(card);
+      return;
+    }
+    if (status === "DENIED") {
+      const card = el("div", "report-card denied");
+      card.appendChild(el("h3", "denied-title", "访问受限（环境受限 / 无权访问）"));
+      card.appendChild(
+        renderKeyValue([
+          ["状态", status],
+          ["原因", payload.reason || "ACCESS_DENIED"],
+          ["已检索资料", String(payload.retrieved_count ?? 0)],
+          ["LLM 调用", "未调用（授权前置拦截）"],
+          ["回答", "无"],
+        ])
+      );
+      card.appendChild(el("p", "disclaimer", BANK_LABEL_DISCLAIMER));
+      area.appendChild(card);
+      return;
+    }
+    if (status === "REFUSED") {
+      const card = el("div", "report-card denied");
+      card.appendChild(el("h3", "denied-title", "模型暂不可用"));
+      card.appendChild(
+        renderKeyValue([
+          ["状态", status],
+          ["原因", payload.reason || "llm_unavailable"],
+          ["LLM 调用", "未调用（模型未配置）"],
+        ])
+      );
+      card.appendChild(el("p", "disclaimer", BANK_LABEL_DISCLAIMER));
+      area.appendChild(card);
+      return;
+    }
+    area.appendChild(el("p", "report-error", "未知状态：" + status));
+  }
+
   function renderError(message) {
     const area = $("#assessment-result");
     area.replaceChildren(el("p", "report-error", message));
@@ -275,7 +335,8 @@
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const result = $("#qa-result");
-    result.textContent = "正在检索…";
+    result.replaceChildren();
+    result.appendChild(el("p", "report-empty", "正在检索并生成回答…"));
     try {
       const payload = await jsonRequest("/api/retrieval/query", {
         body: {
@@ -283,9 +344,11 @@
           asset_id: form.get("asset_id"),
         },
       });
-      result.textContent = JSON.stringify(payload, null, 2);
+      renderQaResult(payload);
     } catch (error) {
-      result.textContent = "问答失败：" + error.message;
+      result.replaceChildren(
+        el("p", "report-error", "问答失败：" + error.message)
+      );
     }
   }
 
