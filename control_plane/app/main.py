@@ -64,6 +64,17 @@ class ProviderSwitchRequest(BaseModel):
     provider: str
 
 
+class ControlledSampleAssessRequest(BaseModel):
+    scenario: str
+    query_subject: str
+    file_names: list[str]
+
+
+class ControlledSampleQueryRequest(BaseModel):
+    question: str
+    file_name: str
+
+
 class CreatePlanRequest(BaseModel):
     operations: list[dict[str, object]]
     expires_at: str
@@ -284,6 +295,89 @@ def create_app(
         if not asset_id:
             raise ApiError(422, "asset_id_required", "Asset ID is required")
         return rag_port.query(actor, question, asset_id)
+
+    @app.post("/api/controlled-sample/assess")
+    def controlled_sample_assess(
+        request: ControlledSampleAssessRequest,
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        """P1: select controlled sample file -> BFF resolves assets -> auto assess.
+
+        The browser only submits import-manifest controlled file names. The BFF
+        resolves them to assets and re-uses create_assessment_report, so the
+        existing authorization gates (evaluate_authorization on asset path) and
+        the active demo rule-version lookup stay unchanged. asset_id never has
+        to be typed by the user.
+        """
+        if not request.file_names:
+            raise ApiError(422, "file_names_required", "At least one file name is required")
+        rag = app.state.rag_port
+        if not hasattr(rag, "resolve_controlled_asset"):
+            raise ApiError(404, "controlled_sample_unavailable", "Controlled sample bridge is not available")
+        asset_ids = []
+        for file_name in request.file_names:
+            asset = rag.resolve_controlled_asset(file_name.strip())
+            if asset is None:
+                raise ApiError(
+                    422,
+                    "unknown_controlled_file",
+                    f"Not a controlled sample file: {file_name}",
+                )
+            asset_ids.append(asset.asset_id)
+        repository = app.state.repository
+        rule_version_id = _active_demo_rule_version(repository, request.scenario)
+        if rule_version_id is None:
+            raise ApiError(
+                422,
+                "no_active_demo_rule_version",
+                "No active demo rule version is available for the scenario",
+            )
+        service = app.state.control_plane_service
+        try:
+            outcome = service.create_assessment_report(
+                actor=actor,
+                scenario=request.scenario,
+                query_subject=request.query_subject,
+                asset_ids=tuple(asset_ids),
+                rule_version_id=rule_version_id,
+            )
+        except AssessmentDeniedError as error:
+            raise ApiError(403, "assessment_denied", "Assessment is not authorized") from error
+        except RuleVersionNotFoundError as error:
+            raise ApiError(404, "rule_version_not_found", "Rule version not found") from error
+        except AssessmentFailedError as error:
+            raise ApiError(502, "assessment_failed", "Assessment failed") from error
+        return {"report": _assessment_report_payload(outcome.report)}
+
+    @app.post("/api/controlled-sample/query")
+    def controlled_sample_query(
+        request: ControlledSampleQueryRequest,
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> Mapping[str, object]:
+        """P1: select controlled sample file + question -> BFF resolves asset -> query.
+
+        Authorization is still decided inside DemoRagPort.query on the resolved
+        asset path; the browser never supplies asset_id.
+        """
+        question = request.question.strip()
+        if not question:
+            raise ApiError(422, "question_required", "Question is required")
+        file_name = request.file_name.strip()
+        if not file_name:
+            raise ApiError(422, "file_name_required", "File name is required")
+        rag = app.state.rag_port
+        if not hasattr(rag, "resolve_controlled_asset"):
+            raise ApiError(404, "controlled_sample_unavailable", "Controlled sample bridge is not available")
+        asset = rag.resolve_controlled_asset(file_name)
+        if asset is None:
+            raise ApiError(
+                422,
+                "unknown_controlled_file",
+                f"Not a controlled sample file: {file_name}",
+            )
+        return rag.query(actor, question, asset.asset_id)
+
+
 
     @app.get("/api/llm/provider")
     def llm_provider_status(
@@ -555,6 +649,18 @@ def _approval_decision_payload(outcome) -> dict[str, object]:
     if outcome.execution_job is not None:
         payload["execution_job"] = _job_payload(outcome.execution_job)
     return payload
+
+
+
+def _active_demo_rule_version(repository, scenario: str) -> str | None:
+    """Return the active demo_fixture rule version id for the scenario, or None."""
+    for rule_version in repository.rule_versions.values():
+        if rule_version.source_type != "demo_fixture":
+            continue
+        rule_set = repository.rule_sets.get(rule_version.rule_set_id)
+        if rule_set is not None and rule_set.scenario == scenario and rule_set.status == "active":
+            return rule_version.rule_version_id
+    return None
 
 
 def _assessment_report_payload(report) -> dict[str, object]:

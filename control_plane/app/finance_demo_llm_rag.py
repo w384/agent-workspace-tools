@@ -135,6 +135,30 @@ class FinanceDemoLlmRagPort:
             actor, asset_versions, rule_version, query_subject
         )
 
+    def resolve_controlled_asset(
+        self,
+        file_name: str,
+    ) -> object | None:
+        """Resolve an import-manifest controlled file name to its asset.
+
+        The BFF translates a selected sample file into the asset record;
+        authorization still happens later via evaluate_authorization on the
+        asset path (unchanged gates). Returns None for unknown names.
+        """
+        relative_path = self._relative_path_for_name(file_name)
+        if relative_path is None:
+            return None
+        return self._repository.find_asset_by_path(
+            self._workspace_id, relative_path
+        )
+
+    def _relative_path_for_name(self, file_name: str) -> str | None:
+        for declared in self._declared_assets.values():
+            path = declared.relative_path
+            if path.rsplit("/", maxsplit=1)[-1] == file_name:
+                return path
+        return None
+
     def _index_declared_samples(self, index: InMemorySearchIndex) -> None:
         parser = DemoDocumentParser(self._source_root)
         for declared in self._declared_assets.values():
