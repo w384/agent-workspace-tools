@@ -92,6 +92,7 @@ git diff --check
 
 - 样例完整性校验：重跑专项测试（固定 8 个 PDF/DOCX 文件集合、rules 版本标签与指纹）。
 - 若样例文件被改动：在具备 python-docx 与 reportlab 依赖的解释器运行 scripts/build_financial_preassessment_demo_assets.py 重建（主项目 service venv 当前未含 reportlab，重建命令未在本机验证，作为边界说明）。
+- 一键初始化（E3）：运行 scripts/init_demo_financial_preassessment.py --seed-only 幂等重建受控资产与 demo_fixture 规则（重复执行资产/规则数量不增长，assets_created/rule_versions_created=0）；初始化后路径 A 评估 MATCH 100。
 - 应用状态重置：重启 control_plane 进程或重新创建内存仓储；测试夹具每次自动重建 asset、version、rule、report 状态。
 - 复跑专项与全量命令确认全绿。
 

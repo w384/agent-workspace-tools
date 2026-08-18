@@ -2,6 +2,7 @@ import asyncio
 import json
 from dataclasses import dataclass
 from http.cookies import SimpleCookie
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
@@ -23,6 +24,16 @@ from control_plane.app.ports import (
 )
 from control_plane.app.repository import InMemoryControlPlaneRepository
 from control_plane.app.sessions import DemoIdentity
+
+
+DEMO_RULES_FIXTURE_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "work"
+    / "demo"
+    / "financial-preassessment"
+    / "rules"
+    / "demo-bank-rules-v1.json"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -523,6 +534,7 @@ def app(repository, file_executor, rag_port, demo_identities):
         demo_identities=demo_identities,
         internal_service_key="demo-internal-key",
         approver_role_id="role-approver-demo",
+        demo_rules_fixture_path=DEMO_RULES_FIXTURE_PATH,
     )
 
 

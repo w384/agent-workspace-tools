@@ -533,6 +533,110 @@ def test_assessment_api_returns_possible_when_authorized_materials_are_incomplet
     assert len(report["missing_materials"]) == 2
 
 
+def test_bff_rule_set_api_uses_controlled_fixture_fingerprint_and_assessment_closes_loop():
+    from control_plane.app.finance_demo_rag import FinanceDemoRagPort
+
+    manifest = json.loads(IMPORT_MANIFEST_PATH.read_text(encoding="utf-8"))
+    rules = json.loads(RULES_PATH.read_text(encoding="utf-8"))
+    actor = _actor()
+    repository = InMemoryControlPlaneRepository()
+    required_keys = _selected_rule_material_keys(rules)
+    versions = tuple(
+        _add_ready_asset(repository, actor, entry["relative_path"])
+        for entry in manifest["assets"]
+        if entry["material_key"] in required_keys
+    )
+    repository.add_permission_grant(
+        PermissionGrant(
+            grant_id="finance-frontend-loop-query",
+            workspace_id=actor.workspace_id,
+            context_version=actor.context_version,
+            principal_type=PrincipalType.USER,
+            principal_id=actor.actor_id,
+            action=Action.QUERY,
+            path_prefix="客户模拟资料",
+        )
+    )
+    port = FinanceDemoRagPort(
+        repository=repository,
+        source_root=SOURCE_ROOT,
+        import_manifest_path=IMPORT_MANIFEST_PATH,
+        rules_path=RULES_PATH,
+    )
+    client = _finance_demo_client(repository, actor, port, demo_rules_fixture_path=RULES_PATH)
+
+    # The frontend "创建演示规则版本" button no longer sends a hardcoded
+    # fingerprint; the BFF resolves the controlled fixture fingerprint itself.
+    rule_response = client.post(
+        "/api/rule-sets",
+        json_body={
+            "scenario": "finance_profile_matching",
+            "name": rules["rule_set_name"],
+            "status": "active",
+            "source_type": rules["source_type"],
+            "version_label": rules["version_label"],
+            "redacted_rule_summary": "受控虚构演示规则，不含真实银行规则。",
+        },
+    )
+    assert rule_response.status_code == 200
+    rule_version = rule_response.json()["rule_version"]
+    assert rule_version["source_type"] == "demo_fixture"
+    assert rule_version["version_label"] == "demo-2026-08-14"
+    assert rule_version["content_fingerprint"] == rules["content_fingerprint"]
+
+    response = client.post(
+        "/api/assessments",
+        json_body={
+            "scenario": "finance_profile_matching",
+            "query_subject": "模拟客户资料匹配度",
+            "asset_ids": [version.asset_id for version in versions],
+            "rule_version_id": rule_version["rule_version_id"],
+        },
+    )
+
+    assert response.status_code == 200
+    report = response.json()["report"]
+    assert report["match_score"] == 100
+    assert report["result_level"] == "MATCH"
+    assert report["missing_materials"] == []
+    assert report["rule_version_evidence"]["content_fingerprint"] == rules[
+        "content_fingerprint"
+    ]
+
+
+def test_bff_rule_set_api_fails_closed_when_client_fingerprint_mismatches_controlled_fixture():
+    from control_plane.app.finance_demo_rag import FinanceDemoRagPort
+
+    rules = json.loads(RULES_PATH.read_text(encoding="utf-8"))
+    actor = _actor()
+    repository = InMemoryControlPlaneRepository()
+    port = FinanceDemoRagPort(
+        repository=repository,
+        source_root=SOURCE_ROOT,
+        import_manifest_path=IMPORT_MANIFEST_PATH,
+        rules_path=RULES_PATH,
+    )
+    client = _finance_demo_client(repository, actor, port, demo_rules_fixture_path=RULES_PATH)
+
+    response = client.post(
+        "/api/rule-sets",
+        json_body={
+            "scenario": "finance_profile_matching",
+            "name": rules["rule_set_name"],
+            "status": "active",
+            "source_type": rules["source_type"],
+            "version_label": rules["version_label"],
+            "content_fingerprint": "sha256:rule-demo-v1",
+            "redacted_rule_summary": "受控虚构演示规则，不含真实银行规则。",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "rule_fingerprint_mismatch"
+    assert repository.rule_sets == {}
+    assert repository.rule_versions == {}
+
+
 def _actor() -> TrustedActorContext:
     return TrustedActorContext(
         actor_id="user-a",
@@ -577,7 +681,7 @@ def _add_ready_asset(
     return repository.get_asset_version(version.asset_version_id)
 
 
-def _finance_demo_client(repository, actor, port):
+def _finance_demo_client(repository, actor, port, demo_rules_fixture_path=None):
     app = create_app(
         repository=repository,
         file_executor=object(),
@@ -594,6 +698,7 @@ def _finance_demo_client(repository, actor, port):
         },
         internal_service_key="controlled-finance-demo-internal-key",
         approver_role_id="role-approver-demo",
+        demo_rules_fixture_path=demo_rules_fixture_path,
     )
     client = AsgiClient(app)
     response = client.post(

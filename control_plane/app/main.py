@@ -1,4 +1,5 @@
 import hmac
+import json
 from dataclasses import asdict
 from pathlib import Path
 from typing import Mapping
@@ -83,7 +84,7 @@ class CreateRuleSetRequest(BaseModel):
     status: str
     source_type: str
     version_label: str
-    content_fingerprint: str
+    content_fingerprint: str | None = None
     redacted_rule_summary: str
 
 
@@ -112,6 +113,7 @@ def create_app(
     demo_identities: Mapping[str, DemoIdentity],
     internal_service_key: str,
     approver_role_id: str,
+    demo_rules_fixture_path: Path | None = None,
     disclaimer_version: str = "disclaimer-demo-v1",
     disclaimer_text: str = "仅供资料完整度与规则匹配演示参考",
 ) -> FastAPI:
@@ -134,6 +136,7 @@ def create_app(
     app.state.demo_identities = dict(demo_identities)
     app.state.internal_service_key = internal_service_key
     app.state.approver_role_id = approver_role_id
+    app.state.demo_rules_fixture_path = demo_rules_fixture_path
     app.state.disclaimer_version = disclaimer_version
     app.state.session_store = session_store
     service = ControlPlaneService(
@@ -281,6 +284,7 @@ def create_app(
         request: CreateRuleSetRequest,
         actor: TrustedActorContext = Depends(require_actor),
     ) -> dict[str, object]:
+        content_fingerprint = _resolve_rule_content_fingerprint(app, request)
         try:
             outcome = service.create_rule_set_with_version(
                 actor=actor,
@@ -289,7 +293,7 @@ def create_app(
                 status=request.status,
                 source_type=request.source_type,
                 version_label=request.version_label,
-                content_fingerprint=request.content_fingerprint,
+                content_fingerprint=content_fingerprint,
                 redacted_rule_summary=request.redacted_rule_summary,
             )
         except RuleSourceNotAllowedError as error:
@@ -521,6 +525,47 @@ def _assessment_report_payload(report) -> dict[str, object]:
     payload["missing_materials"] = list(report.missing_materials)
     payload["citations"] = list(report.citations)
     return payload
+
+
+def _resolve_rule_content_fingerprint(
+    app: FastAPI, request: CreateRuleSetRequest
+) -> str:
+    """BFF-side fingerprint resolution for RuleVersion creation.
+
+    For the controlled demo fixture the fingerprint comes from the fixture file
+    (single source of truth), never from the browser. A client-supplied value
+    that mismatches the fixture is rejected before a RuleVersion is created.
+    """
+    rules_path = app.state.demo_rules_fixture_path
+    fixture_fingerprint: str | None = None
+    if request.source_type == "demo_fixture" and rules_path is not None:
+        payload = json.loads(Path(rules_path).read_text(encoding="utf-8"))
+        candidate = payload.get("content_fingerprint")
+        if not isinstance(candidate, str) or not candidate.startswith("sha256:"):
+            raise ApiError(
+                422,
+                "rule_source_not_allowed",
+                "Controlled rule fixture is invalid",
+            )
+        fixture_fingerprint = candidate
+        if (
+            request.content_fingerprint is not None
+            and request.content_fingerprint != fixture_fingerprint
+        ):
+            raise ApiError(
+                422,
+                "rule_fingerprint_mismatch",
+                "Rule content fingerprint does not match the controlled demo fixture",
+            )
+    if request.content_fingerprint is not None:
+        return request.content_fingerprint
+    if fixture_fingerprint is not None:
+        return fixture_fingerprint
+    raise ApiError(
+        422,
+        "content_fingerprint_required",
+        "content_fingerprint is required",
+    )
 
 
 def _new_id() -> str:

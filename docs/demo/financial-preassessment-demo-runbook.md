@@ -18,9 +18,17 @@
 - 导入清单：work/demo/financial-preassessment/import-manifest.json（仅 asset 到 material_key 映射）
 - 规则夹具：work/demo/financial-preassessment/rules/demo-bank-rules-v1.json（demo_fixture 且带 content_fingerprint）
 - 解释器：service/.venv/Scripts/python.exe
+- 一键初始化：scripts/init_demo_financial_preassessment.py（E3 幂等种子脚本：登录态 alice/demo-a-password + 按 import-manifest 建受控资产 + demo_fixture 规则）
 - 本轮演示以控制面 API 契约与测试驱动为准；Dify 页面实机与真实服务部署不在本演示范围。
 
 ## 演示步骤
+
+### 步骤 0：一键初始化演示环境（E3）
+
+- 展示内容：幂等可重复的初始化脚本一键建立「可演示」状态——登录态（alice/demo-a-password）、按 import-manifest 声明创建 Asset/AssetVersion（绑定真实文件 SHA-256、index_state=ready、active）、demo_fixture 规则版本（content_fingerprint 取自受控夹具）。
+- 输入：运行 service/.venv/Scripts/python.exe scripts/init_demo_financial_preassessment.py（默认在 http://127.0.0.1:8891 提供 /demo/）；仅建状态不启动服务用 --seed-only。
+- 预期输出：打印 seed summary（asset_count=6、active_version_count=6、rule_version_count=1）；重复执行资产/规则数量不增长（assets_created/rule_versions_created=0）；初始化后路径 A 评估 MATCH 100。
+- 留证点：seed summary 输出；重复执行前后数量对比。
 
 ### 步骤 1：统一入口 /demo/ 与演示定位
 
@@ -41,7 +49,7 @@
 #### 步骤 3：创建演示 RuleVersion
 
 - 展示内容：RuleSet/RuleVersion 登记，source_type=demo_fixture，content_fingerprint 来自规则夹具。
-- 输入：POST /api/rule-sets（scenario=finance_profile_matching）。
+- 输入：POST /api/rule-sets（scenario=finance_profile_matching；前端不传 content_fingerprint，由 BFF 以受控夹具真实指纹创建；前端若传入与夹具不符的指纹，BFF 在创建前 422 拒绝，fail closed）。
 - 预期输出：rule_version_id 与规则版本指纹；报告 rule_version_evidence 含 version_label、content_fingerprint、source_type。
 - 留证点：rule_version_id 与指纹截图。
 

@@ -46,3 +46,8 @@ def test_demo_frontend_hides_local_filesystem_paths(client) -> None:
         assert "D:" not in body
         assert "C:" not in body
         assert str(STATIC).replace("\\", "/") not in body
+
+
+def test_demo_frontend_does_not_hardcode_rule_fingerprint(client) -> None:
+    body = _body(client, "/demo/app.js")
+    assert "sha256:rule-demo-v1" not in body
