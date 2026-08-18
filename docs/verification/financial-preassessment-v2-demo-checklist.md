@@ -52,6 +52,21 @@ git diff --check
 - 提交链（main，未推送 origin）：9480e33 docs(agent) → 11b9066 feat(rag) bank_label → 80e4e0c feat(control_plane) E2/E4/E5 → d9007f6 feat(control_plane) E3 → 1477b50 docs(demo) runbook E5 说明 → 43802ba docs(agent) 交接包 3.1 回填。
 - 红线：未 push origin；本地工作区 clean。
 
+## 实际结果（2026-08-18 实测 · v3 E6 路径 B 修复后最终证据）
+
+背景：Q 指示「路径 B（LLM 知识库问答）改接真实 LLM」+「越权演示调整为有授权用户查自己文件成功 → 无授权用户登录查同一文件显示环境受限」。根因是 init 脚本注入的是 stub 桥接（FinanceDemoRagPort.query 硬编码），非真实 LLM；修复为复合端口 FinanceDemoLlmRagPort（query→DemoRagPort 真实 LLM，assess_versions→FinanceDemoRagPort 路径 A 不变，enqueue_version 仍拒绝任意上传）。新增 bob 演示身份（user-b / workspace-a / demo-b-password，无 QUERY grant）用于越权演示。
+
+- 新增 3 测试（test_finance_demo_llm_rag_bridge.py）：3 passed in 0.29s
+  - alice 授权 → /api/retrieval/query：200 ANSWERED、llm_invoked=True、回答「LLM 依据授权证据生成的回答」、citations 绑定 asset_id+asset_version_id、LLM 调用 1 次。
+  - bob（无 QUERY grant）同资产：200 DENIED、reason=ACCESS_DENIED、answer=None、llm_invoked=False、retrieved_count=0、citations=[]、LLM 零调用（requests 空）。
+  - 路径 A assess_versions：仍 match_score=100、result_level=MATCH、missing_materials=()、bank_label 非空。
+- RAG LLM 测试：20 passed in 0.09s（test_llm_answer_generator + test_llm_explanation_port）。
+- 控制面全量：104 passed in 1.57s（101 + 3 新增 = 104，提权运行，含全部安全断言）。
+- 服务端全量：146 passed in 2.12s。
+- git diff --check：exit 0，仅有既有 LF 转 CRLF warning。
+- 提交链（main，未推送 origin）：… → e1b582b docs(verification) checklist 最终证据 → 4d0c241 feat(control_plane) 路径 B 接入真实 LLM 桥接并新增 bob 越权演示身份（3 files +470/-4）。
+- 红线：未 push origin；工作区仅剩 work/.tmp-demo-serve.log* 临时残留（随批次清理，非代码）。
+
 ## 演示自检/重置验证记录（2026-08-14 执行）
 
 按本清单执行样例完整性、失败注入与重置复跑，日志证据位于 work/demo/financial-preassessment/verification/：
