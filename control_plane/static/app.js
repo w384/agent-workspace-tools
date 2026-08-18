@@ -236,40 +236,23 @@
     }
   }
 
-  async function createRuleVersion(event) {
-    event.preventDefault();
-    const result = $("#assessment-result");
-    result.replaceChildren(el("p", "report-empty", "正在创建演示规则版本…"));
-    try {
-      const payload = await jsonRequest("/api/rule-sets", {
-        body: {
-          scenario: "finance_profile_matching",
-          name: "演示银行规则样例",
-          status: "active",
-          source_type: "demo_fixture",
-          version_label: "demo-2026-08-14",
-          redacted_rule_summary: "脱敏演示规则：收入证明、流水、身份证明",
-        },
-      });
-      const ruleVersion = payload.rule_version;
-      result.replaceChildren(
-        el("p", "report-empty", "规则版本已创建：" + ruleVersion.rule_version_id)
-      );
-      $("input[name='rule_version_id']").value = ruleVersion.rule_version_id;
-    } catch (error) {
-      renderError("创建规则版本失败：" + error.message);
-    }
+  function collectControlledFileNames(picker) {
+    if (!picker || !picker.files || !picker.files.length) return [];
+    return Array.from(picker.files)
+      .filter((file) => CONTROLLED_FILE_NAMES.has(file.name))
+      .map((file) => file.name);
   }
 
   function handleFileSelection(event) {
     const picker = event.currentTarget;
     const files = Array.from(picker.files || []);
-    const status = $("#file-picker-status");
+    const isQa = picker.id === "qa-file-picker";
+    const status = $(isQa ? "#qa-file-picker-status" : "#file-picker-status");
     const note = $("#file-picker-note");
     if (files.length === 0) {
       status.className = "file-status";
       status.textContent = "未选择文件。请从受控样例清单中选择 PDF 或 DOCX。";
-      note.classList.add("hidden");
+      if (note) note.classList.add("hidden");
       return;
     }
     const unknown = files.filter((file) => !CONTROLLED_FILE_NAMES.has(file.name));
@@ -279,7 +262,7 @@
         "检测到非受控文件（" +
         unknown.map((file) => file.name).join("、") +
         "）：仅支持 import-manifest 受控样例，任意上传会被底层拒绝。";
-      note.classList.add("hidden");
+      if (note) note.classList.add("hidden");
       picker.value = "";
       return;
     }
@@ -289,36 +272,34 @@
     });
     status.className = "file-status file-status-ok";
     status.textContent =
-      "已识别 " + files.length + " 个受控样例：" + selected.join("、") + "。";
-    note.classList.remove("hidden");
+      "已识别 " + files.length + " 个受控样例：" + selected.join("、") + "。选中即自动发起。";
+    if (note) note.classList.remove("hidden");
+    // 选中即自动发起：按区块分发
+    if (isQa) {
+      ask();
+    } else {
+      assess();
+    }
   }
 
   async function assess(event) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    if (event && event.preventDefault) event.preventDefault();
+    const form = event && event.currentTarget
+      ? new FormData(event.currentTarget)
+      : new FormData($("#assessment-form"));
     const result = $("#assessment-result");
-    const assetIds = String(form.get("asset_ids") || "")
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const picker = $("#demo-file-picker");
-    const hasControlledFiles = picker && picker.files && picker.files.length > 0;
-    if (!assetIds.length) {
-      renderError(
-        hasControlledFiles
-          ? "已选择受控样例，请在“资产 ID”输入框中填写对应受控资产 ID（资产由演示环境初始化提供）后发起评估。"
-          : "请先填写资产 ID（或使用下方受控样例文件选择器）。"
-      );
+    const fileNames = collectControlledFileNames($("#demo-file-picker"));
+    if (!fileNames.length) {
+      renderError("请先选择受控样例文件（资产 ID 已对演示隐藏，选择文件即自动发起）。");
       return;
     }
     result.replaceChildren(el("p", "report-empty", "正在生成预评估报告…"));
     try {
-      const payload = await jsonRequest("/api/assessments", {
+      const payload = await jsonRequest("/api/controlled-sample/assess", {
         body: {
           scenario: form.get("scenario"),
           query_subject: form.get("query_subject"),
-          asset_ids: assetIds,
-          rule_version_id: form.get("rule_version_id"),
+          file_names: fileNames,
         },
       });
       renderReport(payload.report);
@@ -332,16 +313,25 @@
   }
 
   async function ask(event) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    if (event && event.preventDefault) event.preventDefault();
+    const form = event && event.currentTarget
+      ? new FormData(event.currentTarget)
+      : new FormData($("#qa-form"));
     const result = $("#qa-result");
+    const fileNames = collectControlledFileNames($("#qa-file-picker"));
+    if (!fileNames.length) {
+      result.replaceChildren(
+        el("p", "report-error", "请先选择受控样例文件（资产 ID 已对演示隐藏，选择文件即自动发起）。")
+      );
+      return;
+    }
     result.replaceChildren();
     result.appendChild(el("p", "report-empty", "正在检索并生成回答…"));
     try {
-      const payload = await jsonRequest("/api/retrieval/query", {
+      const payload = await jsonRequest("/api/controlled-sample/query", {
         body: {
           question: form.get("question"),
-          asset_id: form.get("asset_id"),
+          file_name: fileNames[0],
         },
       });
       renderQaResult(payload);
@@ -420,12 +410,15 @@
   }
 
   $("#login-form").addEventListener("submit", login);
-  $("#create-rule").addEventListener("click", createRuleVersion);
   $("#assessment-form").addEventListener("submit", assess);
   $("#qa-form").addEventListener("submit", ask);
   const filePicker = $("#demo-file-picker");
   if (filePicker) {
     filePicker.addEventListener("change", handleFileSelection);
+  }
+  const qaFilePicker = $("#qa-file-picker");
+  if (qaFilePicker) {
+    qaFilePicker.addEventListener("change", handleFileSelection);
   }
   document.querySelectorAll(".tab").forEach((button) => {
     button.addEventListener("click", switchTab);

@@ -39,6 +39,7 @@
           <h2>资料预评估报告展示</h2>
           <p>确定性匹配结果 + 版本化引用 + 免责声明；不构成贷款、授信或金融产品结论。</p>
           <form id="assessment-form">
+            <input type="hidden" name="file_names" value="" />
             <label>
               场景 scenario
               <input name="scenario" value="finance_profile_matching" />
@@ -47,15 +48,9 @@
               查询主体 query_subject
               <input name="query_subject" value="customer-demo-001" />
             </label>
-            <label>
-              资产 ID（逗号分隔）
-              <input name="asset_ids" value="" placeholder="asset-id" />
-            </label>
-            <label>
-              规则版本 ID rule_version_id
-              <input name="rule_version_id" value="" placeholder="先创建演示规则版本" />
-            </label>
-            <button type="button" id="create-rule">创建演示规则版本</button>
+
+
+
             <button type="submit">生成预评估报告</button>
           </form>
           <div class="file-picker">
@@ -66,7 +61,7 @@
             <input id="demo-file-picker" type="file" accept=".pdf,.docx" multiple />
             <p id="file-picker-status" class="file-status">未选择文件。</p>
             <p id="file-picker-note" class="note hidden">
-              受控样例已识别。请在“资产 ID”输入框中填写对应受控资产 ID 后生成预评估报告。
+              受控样例已识别。选中受控文件后自动发起预评估，无需填写资产 ID。
             </p>
           </div>
           <div id="assessment-result" class="report-area">
@@ -87,15 +82,21 @@
 </div>
 
           <form id="qa-form">
+            <input type="hidden" name="file_name" value="" />
             <label>
               问题
               <input name="question" value="项目验收要求是什么？" />
             </label>
-            <label>
-              资产 ID
-              <input name="asset_id" value="" placeholder="asset-id" />
-            </label>
-            <button type="submit">提问</button>
+
+            <div class="file-picker">
+            <h3>受控文件选择（知识库问答）</h3>
+            <p class="muted">
+              选择 import-manifest 受控样例文件，选中后自动发起问答。
+            </p>
+            <input id="qa-file-picker" type="file" accept=".pdf,.docx" multiple />
+            <p id="qa-file-picker-status" class="file-status">未选择文件。</p>
+          </div>
+<button type="submit">提问</button>
           </form>
           <pre id="qa-result" class="output"></pre>
         </div>

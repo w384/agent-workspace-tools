@@ -45,3 +45,35 @@ def test_demo_frontend_green_theme(client) -> None:
     assert "--accent-soft" in css
     assert "report-card" in css
     assert "denied-title" in css
+
+
+def test_demo_frontend_p1_auto_trigger_hides_asset_ids(client) -> None:
+    index = _body(client, "/demo/")
+    # asset id / rule version id inputs are removed for the P1 auto-trigger flow
+    assert 'name="asset_ids"' not in index
+    assert 'name="asset_id"' not in index
+    assert 'name="rule_version_id"' not in index
+    # hidden fields carry the controlled file names to the BFF
+    assert 'name="file_names"' in index
+    assert 'name="file_name"' in index
+    # qa panel has its own controlled file picker
+    assert 'id="qa-file-picker"' in index
+
+
+def test_demo_frontend_p1_bff_endpoints_used(client) -> None:
+    app_js = _body(client, "/demo/app.js")
+    assert "/api/controlled-sample/assess" in app_js
+    assert "/api/controlled-sample/query" in app_js
+    # auto-trigger wording
+    assert "选中即自动发起" in app_js
+    # old hand-typed asset id flow is gone
+    assert "asset_ids" not in app_js
+    assert "rule_version_id" not in app_js
+
+
+def test_demo_frontend_p1_no_rule_creation_ui(client) -> None:
+    index = _body(client, "/demo/")
+    assert 'id="create-rule"' not in index
+    app_js = _body(client, "/demo/app.js")
+    assert "createRuleVersion" not in app_js
+    assert "rule-sets" not in app_js
