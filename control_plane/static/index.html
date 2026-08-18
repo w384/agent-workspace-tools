@@ -58,7 +58,20 @@
             <button type="button" id="create-rule">创建演示规则版本</button>
             <button type="submit">生成预评估报告</button>
           </form>
-          <pre id="assessment-result" class="output"></pre>
+          <div class="file-picker">
+            <h3>受控文件选择</h3>
+            <p class="muted">
+              选择项为 import-manifest 受控样例；选中后映射到已授权受控资产发起评估，任意上传仍会被底层拒绝。
+            </p>
+            <input id="demo-file-picker" type="file" accept=".pdf,.docx" multiple />
+            <p id="file-picker-status" class="file-status">未选择文件。</p>
+            <p id="file-picker-note" class="note hidden">
+              受控样例已识别。请在“资产 ID”输入框中填写对应受控资产 ID 后生成预评估报告。
+            </p>
+          </div>
+          <div id="assessment-result" class="report-area">
+            <p class="report-empty">评估报告将在此展示</p>
+          </div>
         </div>
 
         <div id="qa" class="tab-panel hidden">

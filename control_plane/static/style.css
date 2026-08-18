@@ -1,9 +1,15 @@
 :root {
-  --ink: #1f2937;
-  --muted: #6b7280;
-  --border: #d1d5db;
-  --accent: #2563eb;
-  --bg: #f9fafb;
+  --ink: #1f2d24;
+  --muted: #64766b;
+  --border: #d7e4da;
+  --accent: #16a34a;
+  --accent-dark: #15803d;
+  --accent-soft: #eaf6ee;
+  --danger: #b91c1c;
+  --danger-soft: #fdecec;
+  --bg: #f5faf6;
+  --card: #ffffff;
+  --shadow: 0 1px 3px rgba(22, 163, 74, 0.08);
 }
 
 * {
@@ -15,29 +21,38 @@ body {
   font-family: system-ui, "Microsoft YaHei", sans-serif;
   background: var(--bg);
   color: var(--ink);
+  line-height: 1.55;
 }
 
 .shell {
   max-width: 980px;
   margin: 0 auto;
-  padding: 24px 16px 64px;
+  padding: 32px 16px 72px;
+}
+
+.topbar {
+  padding: 8px 4px 20px;
 }
 
 .topbar h1 {
-  margin: 0 0 4px;
+  margin: 0 0 6px;
+  font-size: 26px;
+  letter-spacing: 0.2px;
 }
 
 .subtitle {
-  margin: 0 0 20px;
+  margin: 0;
   color: var(--muted);
+  font-size: 14px;
 }
 
 .card {
-  background: #fff;
+  background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 18px 20px;
+  border-radius: 14px;
+  padding: 20px 22px;
   margin-bottom: 18px;
+  box-shadow: var(--shadow);
 }
 
 .hidden {
@@ -47,15 +62,17 @@ body {
 .tabs {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .tab {
   border: 1px solid var(--border);
-  background: #fff;
-  padding: 8px 14px;
+  background: var(--card);
+  padding: 9px 16px;
   border-radius: 999px;
   cursor: pointer;
+  font-size: 14px;
+  color: var(--ink);
 }
 
 .tab.active {
@@ -68,20 +85,23 @@ label {
   display: grid;
   gap: 4px;
   margin-bottom: 10px;
+  font-size: 14px;
 }
 
 input {
-  padding: 8px;
+  padding: 9px 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 9px;
+  font-size: 14px;
 }
 
 button {
-  padding: 8px 14px;
-  border-radius: 8px;
+  padding: 9px 16px;
+  border-radius: 9px;
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--card);
   cursor: pointer;
+  font-size: 14px;
   margin-right: 6px;
 }
 
@@ -91,17 +111,177 @@ button[type="submit"] {
   border-color: var(--accent);
 }
 
+button[type="submit"]:hover {
+  background: var(--accent-dark);
+}
+
 .status {
-  margin-top: 8px;
+  margin-top: 10px;
   color: var(--muted);
+  font-size: 14px;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .output {
-  background: #f3f4f6;
+  background: #f2f7f3;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 9px;
   padding: 12px;
   white-space: pre-wrap;
   word-break: break-word;
   min-height: 48px;
+  font-size: 13px;
+}
+
+/* 受控文件选择 */
+.file-picker {
+  margin: 18px 0 20px;
+  padding: 14px 16px;
+  border: 1px dashed var(--accent);
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+
+.file-picker h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--accent-dark);
+}
+
+.file-picker .muted {
+  margin: 0 0 10px;
+}
+
+.file-picker input[type="file"] {
+  font-size: 13px;
+}
+
+.file-status {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.file-status-ok {
+  color: var(--accent-dark);
+}
+
+.file-status-error {
+  color: var(--danger);
+}
+
+.note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* 评估报告区 */
+.report-area {
+  margin-top: 4px;
+}
+
+.report-empty {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.report-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 22px;
+  box-shadow: var(--shadow);
+}
+
+.bank-label {
+  margin: 0 0 2px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent-dark);
+}
+
+.bank-disclaimer {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.report-kv {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 6px 12px;
+  margin: 0 0 14px;
+  font-size: 14px;
+}
+
+.report-kv dt {
+  color: var(--muted);
+}
+
+.report-kv dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.report-section {
+  margin: 12px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.report-section h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--accent-dark);
+}
+
+.report-section p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.citations {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.citation-item {
+  margin-bottom: 4px;
+}
+
+.disclaimer {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.report-error {
+  color: var(--danger);
+  font-size: 14px;
+}
+
+.report-card.denied {
+  border-color: #f3c1c1;
+  background: #fffbfb;
+}
+
+.denied-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: var(--danger);
+}
+
+.report-card.denied .disclaimer {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
