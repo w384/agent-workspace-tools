@@ -98,9 +98,10 @@ class LLMClient:
             "temperature": 0.0,
         }
         headers = {
-            "Authorization": f"Bearer {self._config.api_key}",
             "Content-Type": "application/json",
         }
+        if self._config.api_key:
+            headers["Authorization"] = f"Bearer {self._config.api_key}"
         try:
             with httpx.Client(
                 transport=self._transport,
