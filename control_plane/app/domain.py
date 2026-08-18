@@ -172,6 +172,7 @@ class AssessmentReport:
     query_subject: str
     created_at: str
     audit_event_id: str
+    bank_label: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

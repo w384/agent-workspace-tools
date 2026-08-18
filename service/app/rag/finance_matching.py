@@ -39,6 +39,7 @@ class RuleVersionSnapshot:
     content_fingerprint: str
     disclaimer: str
     requirements: tuple[MaterialRequirement, ...]
+    bank_label: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +94,7 @@ class MaterialMatchResult:
     llm_invoked: bool
     explanation: str | None
     reason: str | None = None
+    bank_label: str | None = None
 
 
 class ControlPlanePort(Protocol):
@@ -242,6 +244,7 @@ def _score_matches(
         retrieved_count=len(hits),
         llm_invoked=False,
         explanation=None,
+        bank_label=rule_version.bank_label,
     )
 
 
@@ -259,6 +262,7 @@ def _denied_result(
         llm_invoked=False,
         explanation=None,
         reason="ACCESS_DENIED",
+        bank_label=None,
     )
 
 

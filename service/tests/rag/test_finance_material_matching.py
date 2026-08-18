@@ -47,6 +47,7 @@ def test_demo_rule_version_scores_material_match_with_versioned_refs():
                 label="Income statement",
             ),
         ),
+        bank_label="示例银行A",
     )
     chunk = Chunk(
         tenant_id="tenant-demo",
@@ -123,6 +124,7 @@ def test_demo_rule_version_scores_material_match_with_versioned_refs():
     assert result.status == matching.MaterialMatchStatus.MATCH
     assert result.match_score == 100
     assert result.missing_materials == ()
+    assert result.bank_label == "示例银行A"
     assert result.retrieved_count == 2
     assert result.llm_invoked is True
     assert result.explanation == "polished explanation"
@@ -234,6 +236,7 @@ def test_denied_scope_short_circuits_before_fact_recall_and_explanation():
     assert result.rule_citations == ()
     assert result.match_score == 0
     assert result.explanation is None
+    assert result.bank_label is None
 
 
 @pytest.mark.parametrize(
@@ -330,6 +333,7 @@ def test_fact_index_scope_violations_fail_closed_before_scoring(
     assert result.material_citations == ()
     assert result.rule_citations == ()
     assert result.match_score == 0
+    assert result.bank_label is None
     safe_output = repr((result, explanation_port.call_count))
     assert "DENIED-CHUNK-SENTINEL" not in safe_output
     assert "DENIED-TEXT-SENTINEL" not in safe_output

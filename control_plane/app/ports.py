@@ -42,6 +42,7 @@ class AssessmentResult:
     result_level: str
     missing_materials: tuple[str, ...]
     citations: tuple[Mapping[str, object], ...]
+    bank_label: str | None = None
 
 
 class FileExecutorPort(Protocol):

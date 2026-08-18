@@ -143,6 +143,7 @@ class FinanceDemoRagPort:
             missing_materials=tuple(
                 requirement.label for requirement in result.missing_materials
             ),
+            bank_label=result.bank_label,
             citations=tuple(
                 [
                     {
@@ -246,6 +247,7 @@ class FinanceDemoRagPort:
             content_fingerprint=rule_version.content_fingerprint,
             disclaimer=self._rules_payload["disclaimer"],
             requirements=_selected_rule_requirements(self._rules_payload),
+            bank_label=_selected_rule_bank_label(self._rules_payload),
         )
 
     def _index_declared_facts(
@@ -414,6 +416,7 @@ def _load_rules_fixture(path: Path) -> dict[str, object]:
     ):
         raise ValueError("finance demo rules fixture is invalid")
     _selected_rule_requirements(payload)
+    _selected_rule_bank_label(payload)
     return payload
 
 
@@ -448,6 +451,26 @@ def _selected_rule_requirements(
     if len(parsed_requirements) != len(requirements) or not parsed_requirements:
         raise ValueError("finance demo rule requirements are invalid")
     return parsed_requirements
+
+
+def _selected_rule_bank_label(
+    rules_payload: Mapping[str, object],
+) -> str:
+    selected_rule_id = rules_payload.get("assessment_rule_id")
+    rules = rules_payload.get("rules")
+    if not isinstance(selected_rule_id, str) or not isinstance(rules, list):
+        raise ValueError("finance demo assessment rule is invalid")
+    selected_rules = [
+        rule
+        for rule in rules
+        if isinstance(rule, dict) and rule.get("rule_id") == selected_rule_id
+    ]
+    if len(selected_rules) != 1:
+        raise ValueError("finance demo assessment rule is invalid")
+    bank_label = selected_rules[0].get("bank_label")
+    if not isinstance(bank_label, str) or not bank_label:
+        raise ValueError("finance demo rule bank_label is invalid")
+    return bank_label
 
 
 def _read_json(path: Path) -> dict[str, object]:

@@ -510,6 +510,7 @@ class ControlPlaneService:
             query_subject=query_subject,
             created_at=_utc_now(),
             audit_event_id=event_id,
+            bank_label=result.bank_label,
         )
         self._repository.create_assessment_report(report)
         self._repository.append_audit_event(

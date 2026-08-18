@@ -89,6 +89,7 @@ def test_finance_demo_rag_port_parses_manifest_declared_pdf_docx_and_matches_rul
     assert report.match_score == 100
     assert report.result_level == "MATCH"
     assert report.missing_materials == ()
+    assert report.bank_label == "示例银行A"
     assert report.asset_versions == tuple(
         version.asset_version_id for version in versions
     )
@@ -270,6 +271,7 @@ def test_assessment_api_returns_real_finance_bridge_evidence_and_audit_fields():
     assert isinstance(report["match_score"], int)
     assert report["result_level"] == "MATCH"
     assert report["missing_materials"] == []
+    assert report["bank_label"] == "示例银行A"
     assert report["disclaimer"]
     assert all(
         term not in report["disclaimer"]
@@ -527,6 +529,7 @@ def test_assessment_api_returns_possible_when_authorized_materials_are_incomplet
     assert report["match_score"] == 33
     assert report["result_level"] == "POSSIBLE"
     assert report["result_level"] != "NOT_MATCH"
+    assert report["bank_label"] == "示例银行A"
     assert len(report["missing_materials"]) == 2
 
 
