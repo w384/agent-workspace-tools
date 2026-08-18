@@ -42,6 +42,16 @@ git diff --check
 - 服务端全量：146 passed（2026-08-18 提权回归；原 144+2 的 2 failed 已由任务 B 修复，全绿）。
 - git diff --check：exit 0，仅有既有 LF 转 CRLF warning。
 
+
+## 实际结果（2026-08-18 实测 · v3 总集成合入后最终证据）
+
+- RAG LLM 测试：20 passed in 0.09s（test_llm_answer_generator + test_llm_explanation_port；真实 LLM 输出、DENY 零调用、citations 版本化绑定、LLM 不裁决、凭证不泄、失败 fail-closed）。
+- 控制面全量：101 passed in 1.49s（须提权运行；93 基线 + 前端 v2 4 项 test_demo_frontend_v2.py = 101，含全部安全断言；沙盒内 pytest tmp_path 报 PermissionError [WinError 5]，已清理 work\.pytest-tmp）。
+- 服务端全量：146 passed in 2.13s（改名遗留已修）。
+- git diff --check：exit 0，仅有既有 LF 转 CRLF warning。
+- 提交链（main，未推送 origin）：9480e33 docs(agent) → 11b9066 feat(rag) bank_label → 80e4e0c feat(control_plane) E2/E4/E5 → d9007f6 feat(control_plane) E3 → 1477b50 docs(demo) runbook E5 说明 → 43802ba docs(agent) 交接包 3.1 回填。
+- 红线：未 push origin；本地工作区 clean。
+
 ## 演示自检/重置验证记录（2026-08-14 执行）
 
 按本清单执行样例完整性、失败注入与重置复跑，日志证据位于 work/demo/financial-preassessment/verification/：
