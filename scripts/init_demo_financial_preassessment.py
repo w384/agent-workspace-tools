@@ -231,15 +231,16 @@ def main(argv: list[str] | None = None) -> int:
 
     import uvicorn
 
-    from control_plane.app.finance_demo_rag import FinanceDemoRagPort
+    from control_plane.app.finance_demo_llm_rag import FinanceDemoLlmRagPort
     from control_plane.app.main import create_app
     from control_plane.app.sessions import DemoIdentity
 
-    rag_port = FinanceDemoRagPort(
+    rag_port = FinanceDemoLlmRagPort(
         repository=repository,
         source_root=SOURCE_ROOT,
         import_manifest_path=IMPORT_MANIFEST_PATH,
         rules_path=RULES_PATH,
+        workspace_id=WORKSPACE_ID,
     )
     app = create_app(
         repository=repository,
@@ -254,7 +255,16 @@ def main(argv: list[str] | None = None) -> int:
                 context_version=CONTEXT_VERSION,
                 group_ids=frozenset({"staff"}),
                 role_ids=frozenset({"role-member-demo"}),
-            )
+            ),
+            "bob": DemoIdentity(
+                username="bob",
+                password="demo-b-password",
+                actor_id="user-b",
+                workspace_id=WORKSPACE_ID,
+                context_version=CONTEXT_VERSION,
+                group_ids=frozenset({"staff"}),
+                role_ids=frozenset({"role-member-demo"}),
+            ),
         },
         internal_service_key="demo-internal-key",
         approver_role_id="role-approver-demo",
@@ -262,7 +272,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(
         "serving /demo at http://"
-        f"{args.host}:{args.port}  (login: alice / demo-a-password)"
+        f"{args.host}:{args.port}  (logins: alice / demo-a-password, "
+        "bob / demo-b-password [no-query user])"
     )
     uvicorn.run(app, host=args.host, port=args.port)
     return 0
