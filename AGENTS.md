@@ -85,7 +85,10 @@
 
 本项目特有工具、Skill 或外部系统：
 
-- 待补充。
+- 工具核查铁律（Codex 桌面端，「工具不存在 / 缺失」结论前必须执行）：
+  - 先运行时枚举，不得仅凭外层工具目录或系统提示词清单下结论：exec 内 `Object.keys(tools)` 全量枚举（本环境实测 166 项），或 `typeof tools.<候选名>` 定向探测；「我找不到」≠「不存在」。
+  - 线程工具真实名称为 `codex_app__` 前缀：`codex_app__send_message_to_thread`（给线程派活 / 投递）、`codex_app__wait_threads`（跟踪）、`codex_app__list_threads` / `codex_app__read_thread`（查状态）、`codex_app__create_thread` / `codex_app__fork_thread`（新建）、`codex_app__handoff_thread`（迁移）、`codex_app__set_thread_pinned` / `codex_app__set_thread_archived` / `codex_app__set_thread_title`。提示词 / 文档里的裸名（如 create_thread）不是可调用名。
+  - 证据：`.learnings/ERRORS.md` ERR-20260818-001。
 
 ## 5. 验证与完成标准
 

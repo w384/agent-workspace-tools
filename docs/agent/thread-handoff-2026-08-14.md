@@ -45,7 +45,20 @@
   3. 真实 LLM smoke test ✅（2026-08-18）：真实 deepseek-chat ANSWERED，citations 版本化绑定，key 仅 env 注入零落库；剩余「前端 /demo 人工演示」待 Q 排期。
   4. 待提交项拆分 ✅：A=22f61d8 chore 改名遗留（20 文件）、B=3d9dcf8+8324902 交接/协调文档、C=7f0f153 feat(demo) RAG 5 文件、D=5507416 checklist 证据回填；main HEAD=62b4a0e（含协调者 62b4a0e 3.4 职责扩展），未推送 18 个提交，origin 推送待 Q 授权。
   5. 残留：work/demo/public-drive-ai-organizing/ 已裁定忽略（2026-08-18 提交 .gitignore）；origin 恢复推送待 Q 授权。
-- 下一步：新总集成线程首条消息 = 只读 frozen-v2-integration-contract.md + 本 3.1 节 + 3.6 节（P0 验收口径），复述六项确认后接续待办；持续跟踪 RAG 侧 5 文件提交归属。
+- 在途项（2026-08-18 控制面 v2 派单 07 回报，79e8 工作树未提交；总集成已只读核验并裁决）：
+  - E2（P0 报告区展示）：control_plane/static/{index.html,app.js,style.css} 结构化报告渲染（虚构示例银行名/免责声明/match_score/result_level/缺失材料/引用/规则版本同屏）+ 403 零证据摘要（DENIED/reason/retrieved_count=0/llm_invoked=false/引用无）。
+  - E4（P1 绿系 UI）：绿色主色 #16a34a + 简洁现代卡片布局；浏览器只调 BFF、既有安全断言不变。
+  - E5（P1 受控文件选择）：input type=file 真实选择 + import-manifest 6 样例白名单校验，任意上传前端拦截并提示底层拒绝（enqueue_version 仍拒绝任意文件）。
+  - 测试：新增 test_demo_frontend_v2.py（4 项），control_plane/tests 全量 97 passed（含全部安全断言）；app.js 经 node --check。
+  - 总集成裁决（2026-08-18）：
+    1. bank_label：已核验 main 无该字段、RAG 4c0b 已实现未提交 → 随下次 RAG 合入 main；前端缺省容错「示例银行」过渡，最终客户演示前必须合入。bank_label 只允许虚构示例银行名，不得为真实银行名。
+    2. E5「选中即自动发起」：批准为 P1 后续（BFF 新增受控样例→资产 ID 映射只读端点，选中后自动发起评估），执行延后至 v3 线程；当前「手动填资产 ID」流程由 v3 在 runbook 补充演示期操作说明。
+    3. shu26.cfd 参考站自动截图不可行（浏览器 RPC 受信路径校验失败）→ 接受按派单描述实现，逐像素对照不列为验收项；视觉 QA 并入前端 /demo 人工演示（待 Q 排期）。
+  - v3 接续：RAG 4c0b 提交 bank_label → 合入 main → 控制面 E2/E4/E5 提交合入 → 集成回归 → BFF 受控样例端点（P1）。
+- 主 checkout 未提交 5 文件（2026-08-18 实测；归档流程相关共享改动，v3 核验归属后提交）：
+  - .learnings/LEARNINGS.md（+88）、.learnings/ERRORS.md（+45，含 ERR-20260818-001 线程工具运行时实测）、AGENTS.md（补「工具核查铁律」小节）、docs/agent/thread-archive-sop.md（handoff_thread 实测注记）。
+  - control_plane/static/app.js：1 行修复（jsonRequest headers 判据 options.json→options.body），79e8 E2 批次未含此修复，归属待定，v3 核验后并入。
+- 下一步：新总集成线程首条消息 = 只读 frozen-v2-integration-contract.md + 本 3.1 节 + 3.6 节（P0 验收口径），复述六项确认后接续待办（含本在途项）。
 
 - 执行线程（executor，01a00833-d1f3-7130-bc01-31876dc2d7de，worktree D:\AI\Codex\Worktree\ceb0\agent-workspace-tools）：总集成 2026-08-16 拆出的 B 类机械执行子线程，只做执行不做裁决。职责：跑测试、按给定范围/语义拆分/提交信息做 git add/commit（不自行定范围、不 push）、按给定口径合并代码、采集归档集成证据、按给定口径与模板起草 runbook/checklist、执行三步自检并落日志、演示样例机械构建、文档机械同步、只读证据核验。红线：不裁决集成顺序/Gate/范围/契约，不碰控制面/RAG 模块所有权，不做跨线程决策，不 push origin；归属冲突、根因不明、清单外需求一律回总集成裁决。
 

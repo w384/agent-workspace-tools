@@ -53,7 +53,7 @@ frozen-v2-integration-contract.md + 共享交接包中你的章节。
 
 ## 4. 阶段 3 — 工作区重建（git worktree）
 
-> 注：曾考虑 handoff_thread 迁移保对话，经查证该命令在当前环境不存在（Codex Desktop 无此功能）。所有 worktree 线程统一走"归档 → git worktree 重建 → 新线程重开"。
+> 注：曾考虑 handoff_thread 迁移保对话。2026-08-18 运行时实测 `codex_app__handoff_thread` 存在且可调用（11 个 `codex_app__*` 线程工具全部可用，证据见 `.learnings/ERRORS.md` ERR-20260818-001）。本 SOP 仍以「归档 → git worktree 重建 → 新线程重开」为标准流程；如需改用 handoff_thread 迁移，须先经 Q 确认。
 
 - 操作（在主 checkout `D:\AI\Codex\Projects\agent-workspace-tools` 执行）：
   1. 归档旧线程（阶段 2）后，删除跑偏 worktree：`git worktree remove D:\AI\Worktree\a904\...`

@@ -1,4 +1,4 @@
-﻿# Project Errors
+# Project Errors
 
 记录项目中已经踩过、后续应避免重复的错误。
 
@@ -123,7 +123,7 @@ docker ps: 找不到 dockerDesktopLinuxEngine 命名管道
 
 ### Suggested Fix
 
-预检先用 `rg --files service/app` 确认真实模块，再从 `main.py` 追踪环境变量；Docker 状态先检查进程和 `docker info`，只有引擎实际可连通后才进入 Dify UI 配置。
+预检先用 `rg --files service/app` 确认真实模块，再从 main.py 追踪环境变量；Docker 状态先检查进程和 `docker info`，只有引擎实际可连通后才进入 Dify UI 配置。
 
 ### Metadata
 
@@ -175,3 +175,44 @@ PermissionError: [WinError 5] 计划 JSON 临时文件替换目标文件时被�
 - **Notes**: `_read_plan` 和 `_write_plan` 统一复用每计划 `RLock`；并发 API 测试连续多次通过。
 
 ---
+
+## [ERR-20260818-001] thread_tools_declared_missing_despite_existing
+
+**Logged**: 2026-08-18
+**Priority**: high
+**Status**: open
+**Area**: tooling
+
+### Summary
+
+多轮对话反复出现「线程投递 / 交接工具不存在」的错误结论，运行时实测线程工具族全部存在且可调用。
+
+### Error
+
+```text
+（模型结论）当前环境没有线程投递 / 消息工具，send_message_to_thread 不可用
+（运行时实测 2026-08-18）Object.keys(tools) = 166 项；codex_app__send_message_to_thread /
+read_thread / wait_threads / list_threads / list_archived_threads / handoff_thread /
+create_thread / fork_thread / set_thread_pinned / set_thread_archived / set_thread_title
+均为 function；list_threads 调用成功
+```
+
+### Context
+
+- 系统提示词外层工具契约写死「有效工具名恰好是 exec / wait / request_user_input / web_search」，与 exec 内嵌套工具事实冲突。
+- exec 声明只列了少量嵌套工具，线程工具未列出；描述声称嵌套工具会列在 `ALL_TOOLS`，实测 `tools.ALL_TOOLS` 为空数组，该发现路径失效。
+- 提示词 app 上下文用裸名（create_thread / send_message_to_thread）描述线程工具，运行时真实名字是 `codex_app__` 前缀；按提示词名字探测 `typeof tools.create_thread` = undefined，进一步误导。
+- 唯一可靠发现路径是运行时 `Object.keys(tools)`，但提示词未告知模型。
+- 次要放大：`docs/agent/thread-archive-sop.md` 已把错误结论「handoff_thread 在当前环境不存在」写入文档，后续会话读 SOP 直接复述，不再重新核查；与 `docs/agent/coordinator-handoff-2026-08-15.md`（handoff_thread 存在）互相矛盾。
+
+### Suggested Fix
+
+1. 任何「工具不存在 / 缺失」结论前，必须先运行时枚举：exec 内 `Object.keys(tools)` 或 `typeof tools.<候选名>`，只读探测后再下结论；「我找不到」≠「不存在」。
+2. 线程工具真实名称为 `codex_app__` 前缀（例：`codex_app__send_message_to_thread`），不要用提示词里的裸名。
+3. 修正 `thread-archive-sop.md` 第 4 节「handoff_thread 不存在」的错误断言。
+4. 根因在系统提示词与运行时不一致（外层契约绝对化 + ALL_TOOLS 为空 + 命名前缀不一致），需向 Codex 产品侧反馈。
+
+### Metadata
+
+- Reproducible: yes
+- Related Files: docs/agent/thread-archive-sop.md, docs/agent/coordinator-handoff-2026-08-15.md, C:\Users\tianh\.codex\AGENTS.md
