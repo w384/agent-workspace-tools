@@ -77,6 +77,15 @@
         <div id="qa" class="tab-panel hidden">
           <h2>自然语言知识库问答</h2>
           <p>仅对当前会话授权可见的已激活版本做检索。</p>
+          <div class="model-switch" id="model-switch">
+  <h3>问答模型</h3>
+  <div class="model-switch-buttons" role="group" aria-label="问答模型选择">
+    <button type="button" class="model-btn" data-provider="local">本地模型</button>
+    <button type="button" class="model-btn" data-provider="cloud">联网模型</button>
+  </div>
+  <p id="model-status" class="status"></p>
+</div>
+
           <form id="qa-form">
             <label>
               问题

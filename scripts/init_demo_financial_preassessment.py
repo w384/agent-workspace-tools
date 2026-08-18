@@ -232,17 +232,21 @@ def main(argv: list[str] | None = None) -> int:
     import uvicorn
 
     from control_plane.app.finance_demo_llm_rag import FinanceDemoLlmRagPort
+    from control_plane.app.llm_providers import LLMProviderRegistry
     from control_plane.app.main import create_app
     from control_plane.app.sessions import DemoIdentity
 
+    llm_providers = LLMProviderRegistry()
     rag_port = FinanceDemoLlmRagPort(
         repository=repository,
         source_root=SOURCE_ROOT,
         import_manifest_path=IMPORT_MANIFEST_PATH,
         rules_path=RULES_PATH,
         workspace_id=WORKSPACE_ID,
+        providers=llm_providers,
     )
     app = create_app(
+        llm_providers=llm_providers,
         repository=repository,
         file_executor=object(),
         rag_port=rag_port,

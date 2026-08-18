@@ -39,6 +39,10 @@ class DemoRagPort:
         self._answer_generator = answer_generator
         self.audit_events: list[RetrievalAuditEvent] = []
 
+    def set_answer_generator(self, answer_generator: object | None) -> None:
+        """Replace the answer generator at runtime (provider switch)."""
+        self._answer_generator = answer_generator
+
     def enqueue_version(
         self,
         actor: TrustedActorContext,

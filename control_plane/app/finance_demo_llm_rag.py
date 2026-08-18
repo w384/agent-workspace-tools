@@ -55,6 +55,7 @@ class FinanceDemoLlmRagPort:
         import_manifest_path: Path,
         rules_path: Path,
         workspace_id: str,
+        providers: object | None = None,
         answer_generator: object | None = None,
         explanation_port: object | None = None,
     ) -> None:
@@ -74,8 +75,13 @@ class FinanceDemoLlmRagPort:
         search_index = InMemorySearchIndex(scorer=lambda _question, _chunk: 1.0)
         self._index_declared_samples(search_index)
 
-        if answer_generator is None:
-            answer_generator = _build_default_answer_generator()
+        if providers is not None:
+            self._providers = providers
+            answer_generator = providers.answer_generator
+        else:
+            self._providers = None
+            if answer_generator is None:
+                answer_generator = _build_default_answer_generator()
         self._query_port = DemoRagPort(
             repository=repository,
             search_index=search_index,
@@ -92,6 +98,23 @@ class FinanceDemoLlmRagPort:
         raise RuntimeError(
             "finance demo bridge does not ingest arbitrary uploaded files"
         )
+
+    def set_provider(self, provider_id: str) -> None:
+        """Switch the path-B answer provider at runtime."""
+        if self._providers is None:
+            raise RuntimeError("provider switching is not wired for this bridge")
+        self._providers.switch(provider_id)
+        self._query_port.set_answer_generator(self._providers.answer_generator)
+
+    def current_provider(self) -> str:
+        if self._providers is None:
+            raise RuntimeError("provider switching is not wired for this bridge")
+        return self._providers.current
+
+    def provider_descriptors(self) -> list[object]:
+        if self._providers is None:
+            raise RuntimeError("provider switching is not wired for this bridge")
+        return self._providers.descriptors()
 
     def query(
         self,

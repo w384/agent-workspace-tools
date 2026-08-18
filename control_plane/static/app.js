@@ -289,9 +289,66 @@
     }
   }
 
+
+  async function loadProviderStatus() {
+    const status = $("#model-status");
+    const buttons = document.querySelectorAll(".model-btn");
+    if (!status) return;
+    try {
+      const payload = await jsonRequest("/api/llm/provider", { method: "GET" });
+      const current = payload.current || "local";
+      const labelMap = {};
+      (payload.providers || []).forEach((item) => {
+        labelMap[item.id] = item.label;
+      });
+      buttons.forEach((button) => {
+        const active = button.dataset.provider === current;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      status.textContent = "当前：本地模型（Ollama qwen3.5:9b）";
+      if (labelMap[current]) {
+        status.textContent = "当前：" + labelMap[current];
+      }
+    } catch (error) {
+      status.textContent = "模型状态获取失败：" + error.message;
+    }
+  }
+
+  async function switchProvider(event) {
+    const button = event.currentTarget;
+    const providerId = button.dataset.provider;
+    const status = $("#model-status");
+    if (status) status.textContent = "正在切换模型…";
+    try {
+      const payload = await jsonRequest("/api/llm/provider", {
+        body: { provider: providerId },
+      });
+      const labelMap = {};
+      (payload.providers || []).forEach((item) => {
+        labelMap[item.id] = item.label;
+      });
+      document.querySelectorAll(".model-btn").forEach((btn) => {
+        const active = btn.dataset.provider === payload.current;
+        btn.classList.toggle("active", active);
+        btn.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      if (status) status.textContent = "当前：" + (labelMap[payload.current] || payload.current);
+    } catch (error) {
+      if (status) status.textContent = "切换失败：" + error.message;
+    }
+  }
+
   function switchTab(event) {
     const target = event.currentTarget.dataset.tab;
-    document.querySelectorAll(".tab").forEach((button) => {
+
+  const modelButtons = document.querySelectorAll(".model-btn");
+  modelButtons.forEach((button) => {
+    button.addEventListener("click", switchProvider);
+  });
+  loadProviderStatus();
+
+  document.querySelectorAll(".tab").forEach((button) => {
       button.classList.toggle("active", button.dataset.tab === target);
     });
     document.querySelectorAll(".tab-panel").forEach((panel) => {

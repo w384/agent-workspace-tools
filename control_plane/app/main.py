@@ -60,6 +60,10 @@ class RagQueryRequest(BaseModel):
     asset_id: str
 
 
+class ProviderSwitchRequest(BaseModel):
+    provider: str
+
+
 class CreatePlanRequest(BaseModel):
     operations: list[dict[str, object]]
     expires_at: str
@@ -114,6 +118,7 @@ def create_app(
     internal_service_key: str,
     approver_role_id: str,
     demo_rules_fixture_path: Path | None = None,
+    llm_providers: object | None = None,
     disclaimer_version: str = "disclaimer-demo-v1",
     disclaimer_text: str = "仅供资料完整度与规则匹配演示参考",
 ) -> FastAPI:
@@ -137,6 +142,7 @@ def create_app(
     app.state.internal_service_key = internal_service_key
     app.state.approver_role_id = approver_role_id
     app.state.demo_rules_fixture_path = demo_rules_fixture_path
+    app.state.llm_providers = llm_providers
     app.state.disclaimer_version = disclaimer_version
     app.state.session_store = session_store
     service = ControlPlaneService(
@@ -278,6 +284,38 @@ def create_app(
         if not asset_id:
             raise ApiError(422, "asset_id_required", "Asset ID is required")
         return rag_port.query(actor, question, asset_id)
+
+    @app.get("/api/llm/provider")
+    def llm_provider_status(
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        rag = app.state.rag_port
+        if not hasattr(rag, "current_provider") or not hasattr(rag, "provider_descriptors"):
+            raise ApiError(404, "provider_switching_unavailable", "Provider switching is not available")
+        providers = [
+            {"id": descriptor.id, "label": descriptor.label}
+            for descriptor in rag.provider_descriptors()
+        ]
+        return {"current": rag.current_provider(), "providers": providers}
+
+    @app.post("/api/llm/provider")
+    def llm_provider_switch(
+        request: ProviderSwitchRequest,
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        rag = app.state.rag_port
+        if not hasattr(rag, "set_provider"):
+            raise ApiError(404, "provider_switching_unavailable", "Provider switching is not available")
+        provider_id = request.provider.strip()
+        try:
+            rag.set_provider(provider_id)
+        except (ValueError, RuntimeError) as error:
+            raise ApiError(422, "unknown_provider", str(error)) from error
+        providers = [
+            {"id": descriptor.id, "label": descriptor.label}
+            for descriptor in rag.provider_descriptors()
+        ]
+        return {"current": rag.current_provider(), "providers": providers}
 
     @app.post("/api/rule-sets")
     def create_rule_set(
