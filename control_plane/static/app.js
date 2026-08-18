@@ -92,25 +92,9 @@
       renderKeyValue([
         ["匹配度", (report.match_score ?? "—") + " / 100"],
         ["结果级别", report.result_level || "—"],
-        ["查询主体", report.query_subject || "—"],
         ["缺失材料", missing.length ? missing.join("、") : "无"],
       ])
     );
-
-    const evidence = report.rule_version_evidence || {};
-    const evidenceSection = el("div", "report-section");
-    evidenceSection.appendChild(el("h3", null, "规则版本证据"));
-    evidenceSection.appendChild(
-      el(
-        "p",
-        null,
-        "版本 " +
-          (evidence.version_label || "—") +
-          " · 来源 " +
-          (evidence.source_type || "—")
-      )
-    );
-    card.appendChild(evidenceSection);
 
     const citations = report.citations || [];
     const citationSection = el("div", "report-section");
@@ -231,9 +215,36 @@
       setStatus("登录成功");
       $("#login-panel").classList.add("hidden");
       $("#demo-panel").classList.remove("hidden");
+      const username = String(form.get("username") || "");
+      renderUserChip(username);
     } catch (error) {
       setStatus("登录失败：" + error.message);
     }
+  }
+
+  function renderUserChip(username) {
+    const area = $("#user-area");
+    if (!area) return;
+    const avatar = $("#user-avatar");
+    const nameEl = $("#user-name");
+    const initial = username.charAt(0).toUpperCase();
+    if (avatar) avatar.textContent = initial;
+    if (nameEl) nameEl.textContent = username;
+    area.classList.remove("hidden");
+  }
+
+  async function logout() {
+    try {
+      await jsonRequest("/api/session/logout", { method: "POST" });
+    } catch (error) {
+      // 登出失败也强制回登录页
+    }
+    $("#user-area").classList.add("hidden");
+    $("#demo-panel").classList.add("hidden");
+    $("#login-panel").classList.remove("hidden");
+    const status = $("#login-status");
+    if (status) status.textContent = "已登出。";
+    $("#login-form").reset();
   }
 
   function collectControlledFileNames(picker) {
@@ -273,15 +284,11 @@
     status.className = "file-status file-status-ok";
     status.textContent =
       "已识别 " + files.length + " 个受控样例：" + selected.join("、") +
-      (isQa ? "。点击「提问」开始分析。" : "。选中即自动发起。");
+      (isQa ? "。点击「提问」开始分析。" : "。点击「生成预评估报告」开始分析。");
     if (note) note.classList.remove("hidden");
     const names = files.map((file) => file.name);
     const hiddenField = isQa ? $('[name="file_name"]') : $('[name="file_names"]');
     if (hiddenField) hiddenField.value = names.join(",");
-    // 评估区：选中即自动发起；问答区：点击「提问」后开始分析
-    if (!isQa) {
-      assess();
-    }
   }
 
   async function assess(event) {
@@ -417,6 +424,16 @@
     });
   }
 
+  const logoutBtn = $("#logout-btn");
+  if (logoutBtn) logoutBtn.addEventListener("click", logout);
+  const userChip = $("#user-chip");
+  const logoutTip = $("#logout-tip");
+  if (userChip && logoutTip) {
+    userChip.addEventListener("mouseenter", () => logoutTip.classList.remove("hidden"));
+    userChip.addEventListener("mouseleave", () => logoutTip.classList.add("hidden"));
+    logoutTip.addEventListener("mouseenter", () => logoutTip.classList.remove("hidden"));
+    logoutTip.addEventListener("mouseleave", () => logoutTip.classList.add("hidden"));
+  }
   $("#login-form").addEventListener("submit", login);
   $("#assessment-form").addEventListener("submit", assess);
   $("#qa-form").addEventListener("submit", ask);

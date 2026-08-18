@@ -17,7 +17,7 @@ def test_demo_frontend_renders_structured_report(client) -> None:
     assert "missing_materials" in body
     assert "report-kv" in body
     assert "citation-item" in body
-    assert "rule_version_evidence" in body
+    assert "查询主体" not in body
 
 
 def test_demo_frontend_renders_zero_evidence_denied_summary(client) -> None:
@@ -64,9 +64,9 @@ def test_demo_frontend_p1_bff_endpoints_used(client) -> None:
     app_js = _body(client, "/demo/app.js")
     assert "/api/controlled-sample/assess" in app_js
     assert "/api/controlled-sample/query" in app_js
-    # auto-trigger wording
-    assert "选中即自动发起" in app_js
+    # button-trigger wording（评估与问答都改为点按钮发起）
     assert "点击「提问」开始分析" in app_js
+    assert "点击「生成预评估报告」开始分析" in app_js
     # old hand-typed asset id flow is gone
     assert "asset_ids" not in app_js
     assert "rule_version_id" not in app_js
@@ -85,3 +85,42 @@ def test_demo_frontend_p1_scenario_hidden(client) -> None:
     assert '<input type="hidden" name="scenario"' in index
     assert '<input type="hidden" name="query_subject"' in index
     assert 'name="asset_ids"' not in index
+
+
+def test_demo_frontend_user_area_and_logout(client) -> None:
+    index = _body(client, "/demo/")
+    assert 'id="user-area"' in index
+    assert 'id="user-avatar"' in index
+    assert 'id="user-chip"' in index
+    assert 'id="logout-btn"' in index
+    assert 'id="logout-tip"' in index
+    app_js = _body(client, "/demo/app.js")
+    assert "renderUserChip" in app_js
+    assert "charAt(0).toUpperCase" in app_js
+    assert "/api/session/logout" in app_js
+
+
+def test_demo_frontend_assess_button_below_picker(client) -> None:
+    index = _body(client, "/demo/")
+    # 提交按钮在文件选择器之后
+    picker_pos = index.find('id="demo-file-picker"')
+    btn_pos = index.find('type="submit"', picker_pos)
+    assert picker_pos != -1
+    assert btn_pos != -1
+    assert btn_pos > picker_pos
+    assert "生成预评估报告" in index
+
+
+def test_demo_frontend_report_trimmed(client) -> None:
+    app_js = _body(client, "/demo/app.js")
+    # 精简展示：去掉查询主体/规则版本证据，保留匹配度/结果级别/缺失材料
+    assert "rule_version_evidence" not in app_js
+    assert "查询主体" not in app_js
+    assert "匹配度" in app_js
+    assert "缺失材料" in app_js
+
+
+def test_demo_frontend_login_panel_centered(client) -> None:
+    css = _body(client, "/demo/style.css")
+    assert "#login-panel" in css
+    assert "max-width: 640px" in css

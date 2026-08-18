@@ -9,8 +9,19 @@
   <body>
     <main class="shell">
       <header class="topbar">
-        <h1>资料预评估与知识库问答</h1>
-        <p class="subtitle">统一演示入口：控制面负责身份、权限、报告与审计权威</p>
+        <div class="topbar-title">
+          <h1>资料预评估与知识库问答</h1>
+          <p class="subtitle">统一演示入口：控制面负责身份、权限、报告与审计权威</p>
+        </div>
+        <div class="user-area hidden" id="user-area">
+          <div class="user-chip" id="user-chip" title="">
+            <span class="user-avatar" id="user-avatar"></span>
+            <span class="user-name" id="user-name"></span>
+          </div>
+          <div class="logout-tip hidden" id="logout-tip">
+            <button type="button" id="logout-btn">登出</button>
+          </div>
+        </div>
       </header>
 
       <section id="login-panel" class="card">
@@ -42,22 +53,16 @@
             <input type="hidden" name="file_names" value="" />
             <input type="hidden" name="scenario" value="finance_profile_matching" />
             <input type="hidden" name="query_subject" value="customer-demo-001" />
-
-
-
+            <div class="file-picker">
+              <h3>受控文件选择</h3>
+              <p class="muted">
+                选择 import-manifest 受控样例文件，然后点击「生成预评估报告」开始分析。
+              </p>
+              <input id="demo-file-picker" type="file" accept=".pdf,.docx" multiple />
+              <p id="file-picker-status" class="file-status">未选择文件。</p>
+            </div>
             <button type="submit">生成预评估报告</button>
           </form>
-          <div class="file-picker">
-            <h3>受控文件选择</h3>
-            <p class="muted">
-              选择项为 import-manifest 受控样例；选中后映射到已授权受控资产发起评估，任意上传仍会被底层拒绝。
-            </p>
-            <input id="demo-file-picker" type="file" accept=".pdf,.docx" multiple />
-            <p id="file-picker-status" class="file-status">未选择文件。</p>
-            <p id="file-picker-note" class="note hidden">
-              受控样例已识别。选中受控文件后自动发起预评估，无需填写资产 ID。
-            </p>
-          </div>
           <div id="assessment-result" class="report-area">
             <p class="report-empty">评估报告将在此展示</p>
           </div>

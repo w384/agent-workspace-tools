@@ -36,15 +36,78 @@ body {
 .file-picker,
 .report-area,
 .report-card,
-.output {
+.output,
+#login-panel {
   max-width: 640px;
   margin-left: auto;
   margin-right: auto;
 }
 
+/* 顶栏：标题居中，用户区固定在右上角 */
 .topbar {
+  position: relative;
   padding: 8px 4px 20px;
   text-align: center;
+}
+
+.user-area {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  cursor: default;
+  box-shadow: var(--shadow);
+}
+
+.user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.user-name {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.logout-tip {
+  display: flex;
+  align-items: center;
+  padding: 3px;
+}
+
+.logout-tip button {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.logout-tip button:hover {
+  background: var(--danger-soft);
 }
 
 .topbar h1 {
