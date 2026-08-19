@@ -67,6 +67,17 @@ git diff --check
 - 提交链（main，未推送 origin）：… → e1b582b docs(verification) checklist 最终证据 → 4d0c241 feat(control_plane) 路径 B 接入真实 LLM 桥接并新增 bob 越权演示身份（3 files +470/-4）。
 - 红线：未 push origin；工作区仅剩 work/.tmp-demo-serve.log* 临时残留（随批次清理，非代码）。
 
+## 实际结果（2026-08-19 实测 · v3 P1 受控样例端点 + 前端交互统一后最终证据）
+
+背景：Q 指示演示交互统一「点按钮发起」（问答点提问才分析、预评估点生成报告才出匹配情况），预评估按钮移到文件选择器之后与问答对齐；资产 ID 对演示隐藏（BFF 新增受控样例端点 POST /api/controlled-sample/assess 自动解析白名单样例资产、POST /api/controlled-sample/query 供问答，前端不再暴露 asset_ids 输入）；模型本地/联网切换（本地默认 Ollama qwen3.5:9b / 联网 deepseek-4-flash，联网工具维修中 REFUSED 属预期）；顶栏用户头像（首字母大写）+ hover 登出；登录面板纳入 640px 居中；标题去 DEMO；报告精简（保留 匹配度/结果级别/缺失材料/引用/免责声明，去掉 查询主体/规则版本证据）。
+
+- 前端测试（test_demo_frontend.py + test_demo_frontend_v2.py）：18 passed in 0.30s（含 4 个新增断言：用户区/登出、预评估按钮位置、报告精简、登录面板居中）。
+- 控制面全量：122 passed in 2.16s（118 基线 + 4 新增，提权运行，含全部安全断言）。
+- node --check：exit 0；git diff --check：exit 0，仅有既有 LF 转 CRLF warning。
+- 真实端到端实测：alice 登录 → 选 3 文件点「甑成预评估报告」→ 匹配情况渲染（POSSIBLE/67 分）→ 顶栏头像+登出 → 登出后会话 401 失效回登录页。
+- 提交链（main，未推送 origin）：c0b9c7f BFF 问答模型本地/联网切换 → 3783b46 LLMClient api_key 为空不发 Authorization → 74198fd 问答结果按状态渲染 → 842ef1d BFF 受控样例端点「选中即自动发起」 → 7969d60 前端选中即自动发起+资产 ID 隐藏 → 9f79b4c 前端问答点提问才分析/隐藏场景字段/去 DEMO 标题/居中收窄 → 4a12209 前端交互统一点按钮发起+登录面板居中+报告精简+顶栏头像登出。
+- 红线：未 push origin；工作区仅剩 work/.tmp-demo-serve.log* 临时残留（随批次清理，非代码）。
+
 ## 演示自检/重置验证记录（2026-08-14 执行）
 
 按本清单执行样例完整性、失败注入与重置复跑，日志证据位于 work/demo/financial-preassessment/verification/：
