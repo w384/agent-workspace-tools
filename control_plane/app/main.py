@@ -140,6 +140,21 @@ def create_app(
 
     app = FastAPI()
     static_dir = Path(__file__).resolve().parent.parent / "static"
+
+    @app.middleware("http")
+    async def no_cache_for_demo_static(request: Request, call_next):
+        """Disable browser caching for demo static assets.
+
+        The in-app browser otherwise reuses stale app.js/style.css via
+        ETag/304, hiding frontend updates. Only affects /demo/ so API
+        responses keep their normal caching behavior.
+        """
+        response = await call_next(request)
+        if request.url.path.startswith("/demo/"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+        return response
+
     app.mount(
         "/demo",
         StaticFiles(directory=static_dir, html=True),

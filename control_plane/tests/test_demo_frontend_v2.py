@@ -135,3 +135,14 @@ def test_demo_frontend_candidate_banks_rendering(client) -> None:
     assert "candidate.match_score" in app_js
     assert "candidate.result_level" in app_js
     assert "candidate.missing_materials" in app_js
+
+
+def test_demo_static_assets_are_not_cached(client) -> None:
+    """Demo static assets must not be browser-cached, or frontend updates stay
+    invisible (stale app.js via ETag/304) in the in-app browser."""
+    response = client.get("/demo/app.js")
+    assert response.status_code == 200
+    headers = response.headers
+    assert headers.get("cache-control", "").startswith("no-store")
+    assert "no-cache" in headers.get("cache-control", "")
+    assert headers.get("pragma") == "no-cache"
