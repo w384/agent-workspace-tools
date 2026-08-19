@@ -78,6 +78,22 @@ git diff --check
 - 提交链（main，未推送 origin）：c0b9c7f BFF 问答模型本地/联网切换 → 3783b46 LLMClient api_key 为空不发 Authorization → 74198fd 问答结果按状态渲染 → 842ef1d BFF 受控样例端点「选中即自动发起」 → 7969d60 前端选中即自动发起+资产 ID 隐藏 → 9f79b4c 前端问答点提问才分析/隐藏场景字段/去 DEMO 标题/居中收窄 → 4a12209 前端交互统一点按钮发起+登录面板居中+报告精简+顶栏头像登出。
 - 红线：未 push origin；工作区仅剩 work/.tmp-demo-serve.log* 临时残留（随批次清理，非代码）。
 
+## 实际结果（2026-08-19 实测 · v3 P1-4 多候选银行匹配后最终证据）
+
+背景：Q 指示一次评估同时跑多条候选银行规则，前端展示「可匹配示例银行」列表（匹配度/结果级别/缺失材料），保留单规则评估向后兼容。规则库 demo-bank-rules-v1.json 由 3 条扩展为 5 条（示例银行A/B/C/D/E，assessment_rule_id 仍为 demo-bank-a-complete），content_fingerprint 重算并同步刷新硬编码断言。
+
+- RAG 单测（test_finance_material_matching.py）：6 passed in 0.04s（新增 test_score_multi_rule_matches_returns_one_result_per_candidate_rule，验证每条候选规则返回一个结果）。
+- bridge 新测试（test_finance_demo_rag_bridge.py::test_assessment_api_returns_candidate_banks_for_all_rules）：全量 6 受控材料时断言 5 条候选（A/B/D/E=100 MATCH、C=0 MISSING_INFO、按 fixture 顺序排列）。
+- 前端测试（test_demo_frontend_v2.py）：新增 test_demo_frontend_candidate_banks_rendering（candidate_banks / 可匹配示例银行 / bank_label / match_score / result_level / missing_materials 渲染断言；candidates 空时保持单银行现状）。
+- 序列化链路补齐：AssessmentResult → AssessmentReport → _assessment_report_payload 均新增 candidate_banks 字段透传（domain.py/service.py 各 +1 行）。
+- 断言同步：test_v2_rules_assessment.py content_fingerprint 改动态取值（不再硬编码旧指纹）；test_financial_preassessment_demo_assets.py 规则条数 3→5。
+- 控制面全量：124 passed in 2.05s（122 基线 + 前端 1 + bridge 1，提权运行，含全部安全断言）。
+- 服务端全量：147 passed in 2.03s（146 基线 + 规则库条数断言同步，全绿）。
+- RAG LLM（test_llm_answer_generator + test_llm_explanation_port）：20 passed in 0.09s。
+- node --check：exit 0；git diff --check：exit 0，仅有既有 LF 转 CRLF warning。
+- 提交链（main，未推送 origin）：292a21d feat(control_plane): 评估同时展示多候选银行匹配结果（12 files, +346/-21）→ d2edbb0 前序。
+- 红线：未 push origin；工作区仅剩 work/.tmp-demo-serve.log* 临时残留（随批次清理，非代码）。
+
 ## 演示自检/重置验证记录（2026-08-14 执行）
 
 按本清单执行样例完整性、失败注入与重置复跑，日志证据位于 work/demo/financial-preassessment/verification/：
