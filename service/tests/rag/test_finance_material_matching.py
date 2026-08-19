@@ -337,3 +337,70 @@ def test_fact_index_scope_violations_fail_closed_before_scoring(
     safe_output = repr((result, explanation_port.call_count))
     assert "DENIED-CHUNK-SENTINEL" not in safe_output
     assert "DENIED-TEXT-SENTINEL" not in safe_output
+
+def test_score_multi_rule_matches_returns_one_result_per_candidate_rule():
+    matching = _load_matching_module()
+    active_version = ActiveAssetVersion(
+        asset_id="asset-finance-demo",
+        asset_version_id="version-finance-demo-v1",
+    )
+    chunk = Chunk(
+        tenant_id="tenant-demo",
+        asset_id=active_version.asset_id,
+        asset_version_id=active_version.asset_version_id,
+        chunk_id="chunk-finance-page-2",
+        ordinal=1,
+        text="Simulated demo facts: balance sheet and income statement",
+        page_number=2,
+        paragraph_index=4,
+        parser_version="parser-v1",
+        embedding_version="embedding-v1",
+        index_version="index-v1",
+    )
+    hits = (
+        matching.MaterialFactHit(
+            matching.MaterialFact("balance_sheet", chunk), 0.99
+        ),
+        matching.MaterialFactHit(
+            matching.MaterialFact("income_statement", chunk), 0.98
+        ),
+    )
+    rules = (
+        matching.RuleVersionSnapshot(
+            rule_set_id="ruleset-demo-finance-materials",
+            rule_version_id="rule-version-demo-v1",
+            version_label="demo-v1",
+            source_type=matching.RuleSourceType.DEMO_FIXTURE,
+            content_fingerprint="sha256:demo-rules-v1",
+            disclaimer="Demo fixture only; not a real bank rule.",
+            requirements=(
+                matching.MaterialRequirement("rule-balance-sheet", "balance_sheet", "Balance sheet"),
+                matching.MaterialRequirement("rule-income-statement", "income_statement", "Income statement"),
+            ),
+            bank_label="示例银行A",
+        ),
+        matching.RuleVersionSnapshot(
+            rule_set_id="ruleset-demo-finance-materials",
+            rule_version_id="rule-version-demo-v1",
+            version_label="demo-v1",
+            source_type=matching.RuleSourceType.DEMO_FIXTURE,
+            content_fingerprint="sha256:demo-rules-v1",
+            disclaimer="Demo fixture only; not a real bank rule.",
+            requirements=(
+                matching.MaterialRequirement("rule-cashflow", "cashflow_summary", "Cashflow summary"),
+                matching.MaterialRequirement("rule-business", "business_profile", "Business profile"),
+            ),
+            bank_label="示例银行B",
+        ),
+    )
+    results = matching.score_multi_rule_matches(rule_versions=rules, hits=hits)
+    assert len(results) == 2
+    assert results[0].bank_label == "示例银行A"
+    assert results[0].match_score == 100
+    assert results[0].status == matching.MaterialMatchStatus.MATCH
+    assert results[0].missing_materials == ()
+    assert results[1].bank_label == "示例银行B"
+    assert results[1].match_score == 0
+    assert results[1].status == matching.MaterialMatchStatus.MISSING_INFO
+    assert len(results[1].missing_materials) == 2
+    assert results[1].reason is None

@@ -727,3 +727,76 @@ def _create_rule_version(client, rules):
     )
     assert response.status_code == 200
     return response.json()["rule_version"]["rule_version_id"]
+
+
+def test_assessment_api_returns_candidate_banks_for_all_rules():
+    from control_plane.app.finance_demo_rag import FinanceDemoRagPort
+
+    manifest = json.loads(IMPORT_MANIFEST_PATH.read_text(encoding="utf-8"))
+    rules = json.loads(RULES_PATH.read_text(encoding="utf-8"))
+    actor = _actor()
+    repository = InMemoryControlPlaneRepository()
+    # all controlled sample assets are provided so every candidate rule scores
+    versions = tuple(
+        _add_ready_asset(repository, actor, entry["relative_path"])
+        for entry in manifest["assets"]
+    )
+    repository.add_permission_grant(
+        PermissionGrant(
+            grant_id="finance-candidate-banks-query",
+            workspace_id=actor.workspace_id,
+            context_version=actor.context_version,
+            principal_type=PrincipalType.USER,
+            principal_id=actor.actor_id,
+            action=Action.QUERY,
+            path_prefix="客户模拟资料",
+        )
+    )
+    port = FinanceDemoRagPort(
+        repository=repository,
+        source_root=SOURCE_ROOT,
+        import_manifest_path=IMPORT_MANIFEST_PATH,
+        rules_path=RULES_PATH,
+    )
+    client = _finance_demo_client(repository, actor, port)
+    rule_version_id = _create_rule_version(client, rules)
+
+    response = client.post(
+        "/api/assessments",
+        json_body={
+            "scenario": "finance_profile_matching",
+            "query_subject": "模拟客户资料匹配度",
+            "asset_ids": [version.asset_id for version in versions],
+            "rule_version_id": rule_version_id,
+        },
+    )
+
+    assert response.status_code == 200
+    report = response.json()["report"]
+    candidates = report["candidate_banks"]
+    assert len(candidates) == 5
+    # candidate banks ordered by fixture rule order
+    assert [c["rule_id"] for c in candidates] == [
+        "demo-bank-a-complete",
+        "demo-bank-b-supplement",
+        "demo-bank-c-history",
+        "demo-bank-d-micro",
+        "demo-bank-e-cashflow",
+    ]
+    by_rule = {c["rule_id"]: c for c in candidates}
+    assert by_rule["demo-bank-a-complete"]["bank_label"] == "示例银行A"
+    assert by_rule["demo-bank-a-complete"]["match_score"] == 100
+    assert by_rule["demo-bank-a-complete"]["result_level"] == "MATCH"
+    assert by_rule["demo-bank-a-complete"]["missing_materials"] == []
+    assert by_rule["demo-bank-b-supplement"]["bank_label"] == "示例银行B"
+    assert by_rule["demo-bank-b-supplement"]["match_score"] == 100
+    assert by_rule["demo-bank-b-supplement"]["result_level"] == "MATCH"
+    assert by_rule["demo-bank-c-history"]["bank_label"] == "示例银行C"
+    assert by_rule["demo-bank-c-history"]["match_score"] == 0
+    assert by_rule["demo-bank-c-history"]["result_level"] == "MISSING_INFO"
+    assert by_rule["demo-bank-d-micro"]["bank_label"] == "示例银行D"
+    assert by_rule["demo-bank-d-micro"]["match_score"] == 100
+    assert by_rule["demo-bank-d-micro"]["result_level"] == "MATCH"
+    assert by_rule["demo-bank-e-cashflow"]["bank_label"] == "示例银行E"
+    assert by_rule["demo-bank-e-cashflow"]["match_score"] == 100
+    assert by_rule["demo-bank-e-cashflow"]["result_level"] == "MATCH"

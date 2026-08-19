@@ -66,7 +66,56 @@
           "label": "可核验的外部资质说明"
         }
       ]
+    },
+    {
+      "rule_id": "demo-bank-d-micro",
+      "bank_label": "示例银行D",
+      "result_level": "POSSIBLE",
+      "requirements": [
+        {
+          "rule_id": "demo-bank-d-profile",
+          "material_key": "customer_profile",
+          "label": "资料概览与授权说明"
+        },
+        {
+          "rule_id": "demo-bank-d-income",
+          "material_key": "income_statement",
+          "label": "收入情况说明"
+        },
+        {
+          "rule_id": "demo-bank-d-business",
+          "material_key": "business_profile",
+          "label": "经营情况说明"
+        },
+        {
+          "rule_id": "demo-bank-d-supplement",
+          "material_key": "supplement_material_list",
+          "label": "补充材料清单"
+        }
+      ]
+    },
+    {
+      "rule_id": "demo-bank-e-cashflow",
+      "bank_label": "示例银行E",
+      "result_level": "POSSIBLE",
+      "requirements": [
+        {
+          "rule_id": "demo-bank-e-cashflow",
+          "material_key": "cashflow_summary",
+          "label": "资金流摘要"
+        },
+        {
+          "rule_id": "demo-bank-e-assets",
+          "material_key": "asset_liability_statement",
+          "label": "资产负债说明"
+        },
+        {
+          "rule_id": "demo-bank-e-income",
+          "material_key": "income_statement",
+          "label": "收入情况说明"
+        }
+      ]
     }
   ],
-  "content_fingerprint": "sha256:4ec896850429e7d5edd3d8a943698a1eca0285e4c88c0720ae66e3a78a5e8b40"
+  "content_fingerprint": "sha256:82063964139b1625d9adb8bddeed49b34e6fae525e8ceec07cd063b9fe842293"
 }

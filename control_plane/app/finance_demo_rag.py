@@ -39,6 +39,7 @@ from service.app.rag.finance_matching import (
     MaterialRequirement,
     RuleSourceType,
     RuleVersionSnapshot,
+    score_multi_rule_matches,
 )
 from service.app.rag.index import InMemorySearchIndex
 from service.app.rag.llm import build_llm_explanation_port
@@ -128,7 +129,7 @@ class FinanceDemoRagPort:
             session_id=actor.session_id,
             request_id=actor.request_id,
         )
-        result = self._match_with_explanation(
+        result, hits = self._match_with_explanation(
             context=context,
             facts=facts,
             index=index,
@@ -137,6 +138,10 @@ class FinanceDemoRagPort:
         )
         if result.status is None:
             raise PermissionError("finance demo matching scope denied")
+        candidate_banks = self._candidate_bank_entries(
+            rule_version=rule_version,
+            hits=hits,
+        )
         return AssessmentResult(
             match_score=result.match_score,
             result_level=result.status.value,
@@ -144,6 +149,7 @@ class FinanceDemoRagPort:
                 requirement.label for requirement in result.missing_materials
             ),
             bank_label=result.bank_label,
+            candidate_banks=candidate_banks,
             citations=tuple(
                 [
                     {
@@ -180,25 +186,27 @@ class FinanceDemoRagPort:
         active_versions: tuple[ActiveAssetVersion, ...],
         rule_snapshot: RuleVersionSnapshot,
         include_explanation: bool = True,
-    ) -> MaterialMatchResult:
+    ) -> tuple[MaterialMatchResult, tuple[MaterialFactHit, ...]]:
         if not include_explanation or self._explanation_port is None:
             explanation_port = None
             include_explanation = False
         else:
             explanation_port = self._explanation_port
-        return FinanceMaterialMatchingService(
+        indexed_facts = _IndexedFacts(index=index, facts=facts)
+        result = FinanceMaterialMatchingService(
             control_plane=_FixedMatchingScope(
                 context=context,
                 active_versions=active_versions,
                 rule_version=rule_snapshot,
             ),
-            fact_index=_IndexedFacts(index=index, facts=facts),
+            fact_index=indexed_facts,
             explanation_port=explanation_port,
         ).match(
             context=context,
             limit=len(facts),
             include_explanation=include_explanation,
         )
+        return result, indexed_facts.last_hits
 
     def _require_authorized_active_versions(
         self,
@@ -231,7 +239,13 @@ class FinanceDemoRagPort:
             raise PermissionError("finance demo access denied")
         return tuple(active_versions)
 
-    def _rule_snapshot(self, rule_version: RuleVersion) -> RuleVersionSnapshot:
+    def _rule_snapshot(
+        self,
+        rule_version: RuleVersion,
+        rule_id: str | None = None,
+    ) -> RuleVersionSnapshot:
+        if rule_id is None:
+            rule_id = self._rules_payload.get("assessment_rule_id")
         expected_fingerprint = self._rules_payload["content_fingerprint"]
         if (
             rule_version.source_type != _SOURCE_TYPE
@@ -246,8 +260,75 @@ class FinanceDemoRagPort:
             source_type=RuleSourceType.DEMO_FIXTURE,
             content_fingerprint=rule_version.content_fingerprint,
             disclaimer=self._rules_payload["disclaimer"],
-            requirements=_selected_rule_requirements(self._rules_payload),
-            bank_label=_selected_rule_bank_label(self._rules_payload),
+            requirements=_rule_requirements(self._rules_payload, rule_id),
+            bank_label=_rule_bank_label(self._rules_payload, rule_id),
+        )
+
+    def _all_rule_snapshots(
+        self,
+        rule_version: RuleVersion,
+    ) -> tuple[tuple[str, RuleVersionSnapshot], ...]:
+        expected_fingerprint = self._rules_payload["content_fingerprint"]
+        if (
+            rule_version.source_type != _SOURCE_TYPE
+            or rule_version.content_fingerprint != expected_fingerprint
+            or rule_version.version_label != self._rules_payload["version_label"]
+        ):
+            raise ValueError("rule version does not match controlled demo fixture")
+        return tuple(
+            (
+                rule["rule_id"],
+                RuleVersionSnapshot(
+                    rule_set_id=rule_version.rule_set_id,
+                    rule_version_id=rule_version.rule_version_id,
+                    version_label=rule_version.version_label,
+                    source_type=RuleSourceType.DEMO_FIXTURE,
+                    content_fingerprint=rule_version.content_fingerprint,
+                    disclaimer=self._rules_payload["disclaimer"],
+                    requirements=_rule_requirements(self._rules_payload, rule["rule_id"]),
+                    bank_label=_rule_bank_label(self._rules_payload, rule["rule_id"]),
+                ),
+            )
+            for rule in self._candidate_rules()
+        )
+
+    def _candidate_rules(self) -> tuple[dict[str, object], ...]:
+        rules = self._rules_payload.get("rules")
+        if not isinstance(rules, list) or not rules:
+            raise ValueError("finance demo candidate rules are invalid")
+        return tuple(
+            rule
+            for rule in rules
+            if isinstance(rule, dict) and isinstance(rule.get("rule_id"), str)
+        )
+
+    def _candidate_bank_entries(
+        self,
+        *,
+        rule_version: RuleVersion,
+        hits: tuple[MaterialFactHit, ...],
+    ) -> tuple[Mapping[str, object], ...]:
+        """Score the authorized fact set against every candidate rule."""
+        candidate_snapshots = self._all_rule_snapshots(rule_version)
+        candidate_results = score_multi_rule_matches(
+            rule_versions=tuple(
+                snapshot for _, snapshot in candidate_snapshots
+            ),
+            hits=hits,
+        )
+        return tuple(
+            {
+                "bank_label": candidate.bank_label,
+                "result_level": (
+                    candidate.status.value if candidate.status is not None else "DENIED"
+                ),
+                "match_score": candidate.match_score,
+                "missing_materials": tuple(
+                    requirement.label for requirement in candidate.missing_materials
+                ),
+                "rule_id": candidate_snapshots[index][0],
+            }
+            for index, candidate in enumerate(candidate_results)
         )
 
     def _index_declared_facts(
@@ -347,6 +428,7 @@ class _IndexedFacts:
         self._facts_by_chunk_id = {
             fact.chunk.chunk_id: fact for fact in facts
         }
+        self.last_hits: tuple[MaterialFactHit, ...] = ()
 
     def search(
         self,
@@ -359,13 +441,15 @@ class _IndexedFacts:
             retrieval_filter=retrieval_filter,
             limit=limit,
         )
-        return tuple(
+        hits = tuple(
             MaterialFactHit(
                 fact=self._facts_by_chunk_id[hit.chunk.chunk_id],
                 score=hit.score,
             )
             for hit in hits
         )
+        self.last_hits = hits
+        return hits
 
 
 def _load_import_manifest(
@@ -415,22 +499,22 @@ def _load_rules_fixture(path: Path) -> dict[str, object]:
         or not isinstance(payload.get("disclaimer"), str)
     ):
         raise ValueError("finance demo rules fixture is invalid")
-    _selected_rule_requirements(payload)
-    _selected_rule_bank_label(payload)
+    _rule_requirements(payload, payload.get("assessment_rule_id"))
+    _rule_bank_label(payload, payload.get("assessment_rule_id"))
     return payload
 
 
-def _selected_rule_requirements(
+def _rule_requirements(
     rules_payload: Mapping[str, object],
+    rule_id: str | None,
 ) -> tuple[MaterialRequirement, ...]:
-    selected_rule_id = rules_payload.get("assessment_rule_id")
     rules = rules_payload.get("rules")
-    if not isinstance(selected_rule_id, str) or not isinstance(rules, list):
+    if not isinstance(rule_id, str) or not isinstance(rules, list):
         raise ValueError("finance demo assessment rule is invalid")
     selected_rules = [
         rule
         for rule in rules
-        if isinstance(rule, dict) and rule.get("rule_id") == selected_rule_id
+        if isinstance(rule, dict) and rule.get("rule_id") == rule_id
     ]
     if len(selected_rules) != 1:
         raise ValueError("finance demo assessment rule is invalid")
@@ -453,17 +537,17 @@ def _selected_rule_requirements(
     return parsed_requirements
 
 
-def _selected_rule_bank_label(
+def _rule_bank_label(
     rules_payload: Mapping[str, object],
+    rule_id: str | None,
 ) -> str:
-    selected_rule_id = rules_payload.get("assessment_rule_id")
     rules = rules_payload.get("rules")
-    if not isinstance(selected_rule_id, str) or not isinstance(rules, list):
+    if not isinstance(rule_id, str) or not isinstance(rules, list):
         raise ValueError("finance demo assessment rule is invalid")
     selected_rules = [
         rule
         for rule in rules
-        if isinstance(rule, dict) and rule.get("rule_id") == selected_rule_id
+        if isinstance(rule, dict) and rule.get("rule_id") == rule_id
     ]
     if len(selected_rules) != 1:
         raise ValueError("finance demo assessment rule is invalid")

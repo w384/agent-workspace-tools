@@ -338,3 +338,21 @@ def _rule_citation(
         content_fingerprint=rule_version.content_fingerprint,
         disclaimer=rule_version.disclaimer,
     )
+
+
+def score_multi_rule_matches(
+    *,
+    rule_versions: tuple[RuleVersionSnapshot, ...],
+    hits: tuple[MaterialFactHit, ...],
+) -> tuple[MaterialMatchResult, ...]:
+    """Score one authorized fact set against multiple candidate rules.
+
+    Pure helper for the "candidate banks" demo view. Each candidate rule is
+    scored independently with the same hits (already authorized upstream). Used
+    only inside a bridge where authorization already happened, so a candidate
+    rule scoring zero is a legitimate POSSIBLE/MISSING_INFO, never a denial.
+    """
+    return tuple(
+        _score_matches(rule_version=rule_version, hits=hits)
+        for rule_version in rule_versions
+    )

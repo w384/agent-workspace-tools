@@ -124,3 +124,14 @@ def test_demo_frontend_login_panel_centered(client) -> None:
     css = _body(client, "/demo/style.css")
     assert "#login-panel" in css
     assert "max-width: 640px" in css
+
+
+def test_demo_frontend_candidate_banks_rendering(client) -> None:
+    app_js = _body(client, "/demo/app.js")
+    assert "candidate_banks" in app_js
+    assert "可匹配示例银行" in app_js
+    assert "candidate-bank-label" in app_js
+    assert "candidate-bank" in app_js
+    assert "candidate.match_score" in app_js
+    assert "candidate.result_level" in app_js
+    assert "candidate.missing_materials" in app_js

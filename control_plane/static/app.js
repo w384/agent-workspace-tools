@@ -96,6 +96,26 @@
       ])
     );
 
+    const candidates = report.candidate_banks || [];
+    if (candidates.length) {
+      const candidateSection = el("div", "report-section");
+      candidateSection.appendChild(el("h3", null, "可匹配示例银行"));
+      const list = el("ul", "candidate-banks");
+      candidates.forEach((candidate) => {
+        const item = el("li", "candidate-bank");
+        item.appendChild(el("span", "candidate-bank-label", candidate.bank_label || "示例银行"));
+        item.appendChild(
+          renderKeyValue([
+            ["匹配度", (candidate.match_score ?? "—") + " / 100"],
+            ["结果级别", candidate.result_level || "—"],
+            ["缺失材料", (candidate.missing_materials || []).length ? candidate.missing_materials.join("、") : "无"],
+          ])
+        );
+        list.appendChild(item);
+      });
+      candidateSection.appendChild(list);
+      card.appendChild(candidateSection);
+    }
     const citations = report.citations || [];
     const citationSection = el("div", "report-section");
     citationSection.appendChild(el("h3", null, "引用"));

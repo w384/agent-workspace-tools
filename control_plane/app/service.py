@@ -511,6 +511,7 @@ class ControlPlaneService:
             created_at=_utc_now(),
             audit_event_id=event_id,
             bank_label=result.bank_label,
+            candidate_banks=result.candidate_banks,
         )
         self._repository.create_assessment_report(report)
         self._repository.append_audit_event(

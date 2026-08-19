@@ -173,6 +173,7 @@ class AssessmentReport:
     created_at: str
     audit_event_id: str
     bank_label: str | None = None
+    candidate_banks: tuple[Mapping[str, object], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

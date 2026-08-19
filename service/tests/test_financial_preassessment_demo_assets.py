@@ -39,7 +39,7 @@ def test_financial_preassessment_demo_assets_are_fictional_and_versioned():
     assert rules["version_label"] == "demo-2026-08-14"
     assert rules["assessment_rule_id"] == "demo-bank-a-complete"
     assert "仅供资料完整度与规则匹配演示参考" in rules["disclaimer"]
-    assert len(rules["rules"]) == 3
+    assert len(rules["rules"]) == 5
     assert {rule["result_level"] for rule in rules["rules"]} == {
         "MATCH",
         "POSSIBLE",

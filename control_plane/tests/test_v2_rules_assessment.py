@@ -105,7 +105,7 @@ def test_v2_assessment_uses_trusted_active_asset_version_and_audits_report(clien
     assert report["rule_version_evidence"] == {
         "rule_version_id": rule_version["rule_version_id"],
         "version_label": "demo-2026-08-14",
-        "content_fingerprint": "sha256:4ec896850429e7d5edd3d8a943698a1eca0285e4c88c0720ae66e3a78a5e8b40",
+        "content_fingerprint": rule_version["content_fingerprint"],
         "source_type": "demo_fixture",
     }
     assert report["disclaimer"] == "仅供资料完整度与规则匹配演示参考"
