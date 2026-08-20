@@ -163,3 +163,25 @@ def test_demo_static_assets_are_not_cached(client) -> None:
     assert headers.get("cache-control", "").startswith("no-store")
     assert "no-cache" in headers.get("cache-control", "")
     assert headers.get("pragma") == "no-cache"
+
+
+def test_demo_frontend_qa_model_name_and_target_bar(client) -> None:
+    # 常驻指示条：告诉用户「接下来提问谁」，杜绝两区选择困惑
+    index = _body(client, "/demo/")
+    assert 'id="qa-current-target"' in index
+    assert "尚未选择文件，请上传真实材料或选择受控样例" in index
+    app_js = _body(client, "/demo/app.js")
+    assert "updateQaCurrentTarget" in app_js
+    assert "当前将提问：" in app_js
+    # 登出清空云端 Key 并回退本地模型
+    assert "resetModelUi" in app_js
+    # 问答回答卡片展示真实调用模型名
+    assert "currentModelLabel" in app_js
+    assert '["模型", currentModelLabel]' in app_js
+    # 409 文案拆分：本人上传 vs 可能其他账号（不再无条件承诺「可直接提问」）
+    assert "该文件本会话已上传过，已自动选中，可直接提问" in app_js
+    assert "可能是其他账号上传，你未必有访问权限" in app_js
+    # DENIED 卡片文案：主文案给结论，副文案给下一步
+    assert "你没有访问该文件的权限" in app_js
+    assert "该文件由其他账号上传，仅上传者有权检索" in app_js
+    assert "可改用受控样例文件体验问答" in app_js

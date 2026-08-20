@@ -317,3 +317,40 @@ def test_provider_cloud_runtime_key_injected_not_leaked(
     assert query.status_code == 200
     assert query.json()["status"] == "ANSWERED"
     assert "runtime-key-123" not in query.content.decode("utf-8")
+
+
+def test_provider_cloud_key_cleared_after_logout(
+    file_executor, demo_identities, monkeypatch
+) -> None:
+    """Logout clears the runtime-typed cloud key.
+
+    After the demo user types a DeepSeek key and switches to cloud, logging
+    out must drop the in-memory override and fall back to local, so the next
+    session has to re-enter the key.
+    """
+    from conftest import AsgiClient
+
+    env = dict(_demo_environment())
+    env["RAG_LLM_API_KEY"] = ""
+    app, registry, _port, _version = _build_app(
+        file_executor, demo_identities, monkeypatch, environment=env
+    )
+    client = AsgiClient(app)
+    client.post(
+        "/api/session/login",
+        json_body={"username": "alice", "password": "demo-a-password"},
+    )
+
+    switch = client.post(
+        "/api/llm/provider",
+        json_body={"provider": "cloud", "api_key": "runtime-key-123"},
+    )
+    assert switch.status_code == 200
+    assert switch.json()["cloud_key_configured"] is True
+
+    logout = client.post("/api/session/logout")
+    assert logout.status_code == 204
+
+    assert registry.current == "local"
+    assert registry.cloud_key_configured is False
+    assert "runtime-key-123" not in logout.content.decode("utf-8")

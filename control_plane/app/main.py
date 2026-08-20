@@ -265,6 +265,9 @@ def create_app(
     @app.post("/api/session/logout", status_code=204)
     def logout(cp_session: str | None = Cookie(default=None)) -> Response:
         session_store.revoke(cp_session)
+        rag = getattr(app.state, "rag_port", None)
+        if rag is not None and hasattr(rag, "clear_cloud_key"):
+            rag.clear_cloud_key()
         response = Response(status_code=204)
         response.delete_cookie("cp_session", path="/", httponly=True, samesite="strict")
         return response

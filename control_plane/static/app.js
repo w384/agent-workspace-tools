@@ -18,8 +18,12 @@
   );
 
   let cloudKeyConfigured = false;
+  // 当前问答展示的模型名（回答卡片标注真实调用来源）
+  let currentModelLabel = "本地模型（Ollama qwen3.5:9b）";
   // 会话内已上传的真实材料（自动建库），登出时清空
   let qaUploadedFiles = [];
+  // 本会话真正上传成功的文件（409 时用于区分「本人上传」还是「可能其他账号」）
+  let qaOwnUploaded = [];
   // 当前问答选中的文件：{ name, kind: "uploaded" | "controlled" }
   let qaSelectedFile = null;
 
@@ -190,6 +194,7 @@
       card.appendChild(
         renderKeyValue([
           ["LLM 调用", "已调用（真实模型生成）"],
+          ["模型", currentModelLabel],
           ["引用证据", String((payload.citations || []).length) + " 条"],
         ])
       );
@@ -209,7 +214,10 @@
     }
     if (status === "DENIED") {
       const card = el("div", "report-card denied");
-      card.appendChild(el("h3", "denied-title", "访问受限（环境受限 / 无权访问）"));
+      card.appendChild(el("h3", "denied-title", "你没有访问该文件的权限"));
+      card.appendChild(
+        el("p", "denied-hint", "该文件由其他账号上传，仅上传者有权检索；可改用受控样例文件体验问答。")
+      );
       card.appendChild(
         renderKeyValue([
           ["状态", status],
@@ -276,6 +284,38 @@
     area.classList.remove("hidden");
   }
 
+  // 常驻指示条：任何时候都让用户看到「接下来提问谁」
+  function updateQaCurrentTarget() {
+    const target = $("#qa-current-target");
+    if (!target) return;
+    if (qaSelectedFile) {
+      const source = qaSelectedFile.kind === "uploaded" ? "已上传材料" : "受控样例";
+      target.className = "file-status file-status-ok";
+      target.textContent =
+        "当前将提问：" + qaSelectedFile.name + "（来源：" + source + "）";
+    } else {
+      target.className = "file-status";
+      target.textContent = "尚未选择文件，请上传真实材料或选择受控样例。";
+    }
+  }
+
+  // 登出时重置模型区：清空云端 Key（BFF 已同步清）、回退本地模型高亮
+  function resetModelUi() {
+    cloudKeyConfigured = false;
+    currentModelLabel = "本地模型（Ollama qwen3.5:9b）";
+    const keyPanel = $("#cloud-key-panel");
+    if (keyPanel) keyPanel.classList.add("hidden");
+    const keyInput = $("#cloud-api-key");
+    if (keyInput) keyInput.value = "";
+    document.querySelectorAll(".model-btn").forEach((btn) => {
+      const active = btn.dataset.provider === "local";
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    const status = $("#model-status");
+    if (status) status.textContent = "当前：" + currentModelLabel;
+  }
+
   async function logout() {
     try {
       await jsonRequest("/api/session/logout", { method: "POST" });
@@ -291,6 +331,7 @@
     if (qr) qr.replaceChildren();
     resetControlledFilePickers();
     resetUploadedMaterials();
+    resetModelUi();
     activateTab("assessment");
     const status = $("#login-status");
     if (status) status.textContent = "已登出。";
@@ -317,7 +358,9 @@
 
   function resetUploadedMaterials() {
     qaUploadedFiles = [];
+    qaOwnUploaded = [];
     qaSelectedFile = null;
+    updateQaCurrentTarget();
     const wrap = $("#qa-uploaded-list");
     if (wrap) wrap.classList.add("hidden");
     const list = $("#qa-uploaded-items");
@@ -364,6 +407,7 @@
     document.querySelectorAll(".uploaded-file-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.textContent === name);
     });
+    updateQaCurrentTarget();
   }
 
   async function uploadRealMaterial() {
@@ -388,6 +432,9 @@
       if (!qaUploadedFiles.includes(payload.file_name)) {
         qaUploadedFiles.push(payload.file_name);
       }
+      if (!qaOwnUploaded.includes(payload.file_name)) {
+        qaOwnUploaded.push(payload.file_name);
+      }
       renderUploadedFiles();
       selectUploadedFile(payload.file_name);
       if (picker) picker.value = "";
@@ -398,8 +445,26 @@
       }
     } catch (error) {
       if (status) {
-        status.className = "file-status file-status-error";
-        status.textContent = "上传失败：" + error.message;
+        const dupCode =
+          error.status === 409 &&
+          error.payload &&
+          error.payload.error &&
+          error.payload.error.code === "upload_target_exists";
+        if (dupCode && file) {
+          const ownUpload = qaOwnUploaded.includes(file.name);
+          if (!qaUploadedFiles.includes(file.name)) {
+            qaUploadedFiles.push(file.name);
+          }
+          renderUploadedFiles();
+          selectUploadedFile(file.name);
+          status.className = "file-status file-status-ok";
+          status.textContent = ownUpload
+            ? "该文件本会话已上传过，已自动选中，可直接提问：" + file.name
+            : "该文件已存在，可能是其他账号上传，你未必有访问权限。已为你选中，点「提问」验证：" + file.name;
+        } else {
+          status.className = "file-status file-status-error";
+          status.textContent = "上传失败：" + error.message;
+        }
       }
     }
   }
@@ -466,6 +531,7 @@
       document.querySelectorAll(".uploaded-file-btn").forEach((btn) => {
         btn.classList.remove("active");
       });
+      updateQaCurrentTarget();
     }
   }
 
@@ -565,7 +631,8 @@
         button.classList.toggle("active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       });
-      status.textContent = "当前：" + (labelMap[current] || current);
+      currentModelLabel = labelMap[current] || current;
+      status.textContent = "当前：" + currentModelLabel;
       if (!cloudKeyConfigured && current === "cloud") {
         status.textContent += "（未配置 Key，重新选择联网模型时需填写）";
       }
@@ -606,7 +673,8 @@
         btn.classList.toggle("active", active);
         btn.setAttribute("aria-pressed", active ? "true" : "false");
       });
-      if (status) status.textContent = "当前：" + (labelMap[payload.current] || payload.current);
+      currentModelLabel = labelMap[payload.current] || payload.current;
+      if (status) status.textContent = "当前：" + currentModelLabel;
     } catch (error) {
       if (status) status.textContent = "切换失败：" + error.message;
     }
@@ -639,7 +707,8 @@
         btn.classList.toggle("active", active);
         btn.setAttribute("aria-pressed", active ? "true" : "false");
       });
-      if (status) status.textContent = "当前：" + (labelMap[payload.current] || payload.current);
+      currentModelLabel = labelMap[payload.current] || payload.current;
+      if (status) status.textContent = "当前：" + currentModelLabel;
     } catch (error) {
       if (status) status.textContent = "切换失败：" + error.message;
     }

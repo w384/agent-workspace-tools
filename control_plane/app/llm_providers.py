@@ -118,6 +118,16 @@ class LLMProviderRegistry:
         self._answer_generator = self._build(provider_id)
         self._current = provider_id
         return True
+    def clear_cloud_key(self) -> None:
+        """Drop any runtime-typed cloud API key and fall back to local when
+        the cloud provider can no longer be used (called on logout).
+        Only the runtime override is session-scoped; an environment-provided
+        key (if any) is left untouched.
+        """
+        self._cloud_api_key_override = None
+        if self._current == CLOUD_PROVIDER_ID and not self.cloud_key_configured:
+            self._current = LOCAL_PROVIDER_ID
+            self._answer_generator = self._build(LOCAL_PROVIDER_ID)
     def _build(self, provider_id: str) -> object | None:
         secrets = (
             _local_secrets(self._environment)

@@ -179,6 +179,17 @@ class FinanceDemoLlmRagPort:
             return False
         return bool(self._providers.cloud_key_configured)
 
+    def clear_cloud_key(self) -> None:
+        """Drop the runtime-typed cloud key on logout (BFF delegate).
+
+        The registry falls back to local when the cloud provider can no
+        longer be used; the path-B answer generator is rebuilt accordingly.
+        """
+        if self._providers is None:
+            return
+        self._providers.clear_cloud_key()
+        self._query_port.set_answer_generator(self._providers.answer_generator)
+
     def provider_descriptors(self) -> list[object]:
         if self._providers is None:
             raise RuntimeError("provider switching is not wired for this bridge")
