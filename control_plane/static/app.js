@@ -17,6 +17,8 @@
     CONTROLLED_SAMPLE_FILES.map((item) => item.name)
   );
 
+  let cloudKeyConfigured = false;
+
   function setStatus(message) {
     $("#login-status").textContent = message;
   }
@@ -417,6 +419,7 @@
     if (!status) return;
     try {
       const payload = await jsonRequest("/api/llm/provider", { method: "GET" });
+      cloudKeyConfigured = !!payload.cloud_key_configured;
       const current = payload.current || "local";
       const labelMap = {};
       (payload.providers || []).forEach((item) => {
@@ -427,9 +430,9 @@
         button.classList.toggle("active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       });
-      status.textContent = "当前：本地模型（Ollama qwen3.5:9b）";
-      if (labelMap[current]) {
-        status.textContent = "当前：" + labelMap[current];
+      status.textContent = "当前：" + (labelMap[current] || current);
+      if (!cloudKeyConfigured && current === "cloud") {
+        status.textContent += "（未配置 Key，重新选择联网模型时需填写）";
       }
     } catch (error) {
       status.textContent = "模型状态获取失败：" + error.message;
@@ -440,11 +443,25 @@
     const button = event.currentTarget;
     const providerId = button.dataset.provider;
     const status = $("#model-status");
+    const keyPanel = $("#cloud-key-panel");
+    if (providerId === "cloud" && !cloudKeyConfigured) {
+      if (keyPanel) {
+        keyPanel.classList.remove("hidden");
+        const input = $("#cloud-api-key");
+        if (input) input.focus();
+      }
+      if (status) {
+        status.textContent = "联网模型未配置 DeepSeek API Key，请先填写后确认切换。";
+      }
+      return;
+    }
     if (status) status.textContent = "正在切换模型…";
     try {
       const payload = await jsonRequest("/api/llm/provider", {
         body: { provider: providerId },
       });
+      cloudKeyConfigured = !!payload.cloud_key_configured;
+      if (keyPanel) keyPanel.classList.add("hidden");
       const labelMap = {};
       (payload.providers || []).forEach((item) => {
         labelMap[item.id] = item.label;
@@ -458,6 +475,48 @@
     } catch (error) {
       if (status) status.textContent = "切换失败：" + error.message;
     }
+  }
+
+  async function confirmCloudKey() {
+    const input = $("#cloud-api-key");
+    const key = input ? input.value.trim() : "";
+    const status = $("#model-status");
+    const keyPanel = $("#cloud-key-panel");
+    if (!key) {
+      if (status) status.textContent = "请先填写 DeepSeek API Key。";
+      if (input) input.focus();
+      return;
+    }
+    if (status) status.textContent = "正在切换模型…";
+    try {
+      const payload = await jsonRequest("/api/llm/provider", {
+        body: { provider: "cloud", api_key: key },
+      });
+      cloudKeyConfigured = !!payload.cloud_key_configured;
+      if (keyPanel) keyPanel.classList.add("hidden");
+      if (input) input.value = "";
+      const labelMap = {};
+      (payload.providers || []).forEach((item) => {
+        labelMap[item.id] = item.label;
+      });
+      document.querySelectorAll(".model-btn").forEach((btn) => {
+        const active = btn.dataset.provider === payload.current;
+        btn.classList.toggle("active", active);
+        btn.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      if (status) status.textContent = "当前：" + (labelMap[payload.current] || payload.current);
+    } catch (error) {
+      if (status) status.textContent = "切换失败：" + error.message;
+    }
+  }
+
+  function cancelCloudKey() {
+    const keyPanel = $("#cloud-key-panel");
+    if (keyPanel) keyPanel.classList.add("hidden");
+    const input = $("#cloud-api-key");
+    if (input) input.value = "";
+    const status = $("#model-status");
+    if (status) status.textContent = "已取消；继续使用当前模型。";
   }
 
   function switchTab(event) {
@@ -481,6 +540,19 @@
     userChip.addEventListener("mouseleave", () => logoutTip.classList.add("hidden"));
     logoutTip.addEventListener("mouseenter", () => logoutTip.classList.remove("hidden"));
     logoutTip.addEventListener("mouseleave", () => logoutTip.classList.add("hidden"));
+  }
+  const cloudKeyConfirm = $("#cloud-key-confirm");
+  if (cloudKeyConfirm) cloudKeyConfirm.addEventListener("click", confirmCloudKey);
+  const cloudKeyCancel = $("#cloud-key-cancel");
+  if (cloudKeyCancel) cloudKeyCancel.addEventListener("click", cancelCloudKey);
+  const cloudKeyInput = $("#cloud-api-key");
+  if (cloudKeyInput) {
+    cloudKeyInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        confirmCloudKey();
+      }
+    });
   }
   $("#login-form").addEventListener("submit", login);
   $("#assessment-form").addEventListener("submit", assess);

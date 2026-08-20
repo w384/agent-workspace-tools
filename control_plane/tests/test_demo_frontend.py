@@ -23,12 +23,24 @@ def test_demo_assets_are_served(client) -> None:
 
 
 def test_demo_frontend_does_not_leak_credentials_or_keys(client) -> None:
+    # The api_key request field name is intentional in app.js (the DeepSeek
+    # key is typed at runtime and sent to the BFF); no other credential names
+    # or secret values may appear anywhere in the static demo files.
     for path in ("/demo/", "/demo/app.js", "/demo/style.css"):
         body = _body(client, path).lower()
-        assert "api_key" not in body
         assert "internal_service_key" not in body
         assert "authorization" not in body
         assert "secret" not in body
+    for path in ("/demo/", "/demo/style.css"):
+        body = _body(client, path).lower()
+        assert "api_key" not in body
+
+
+def test_demo_frontend_never_bakes_a_real_api_key(client) -> None:
+    body = _body(client, "/demo/app.js")
+    # app.js references the BFF request field name but never a concrete value.
+    assert "api_key: key" in body
+    assert "sk-" not in body
 
 
 def test_demo_frontend_does_not_leak_llm_credential_names(client) -> None:

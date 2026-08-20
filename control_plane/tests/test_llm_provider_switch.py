@@ -91,12 +91,14 @@ def _patch_httpx_client(monkeypatch) -> None:
     monkeypatch.setattr(httpx, "Client", RecordingHttpxClient)
 
 
-def _build_app(file_executor, demo_identities, monkeypatch):
+def _build_app(file_executor, demo_identities, monkeypatch, environment=None):
     """Build the demo app with a provider-switchable composite port."""
     from control_plane.app.finance_demo_llm_rag import FinanceDemoLlmRagPort
     from control_plane.app.llm_providers import LLMProviderRegistry
     from control_plane.app.main import create_app
 
+    if environment is None:
+        environment = _demo_environment()
     manifest = _manifest()
     repository = InMemoryControlPlaneRepository()
     version = _add_ready_asset(
@@ -105,7 +107,7 @@ def _build_app(file_executor, demo_identities, monkeypatch):
     _grant_query(repository, actor_id=ACTOR_A)
     _patch_httpx_client(monkeypatch)
 
-    registry = LLMProviderRegistry(environment=_demo_environment())
+    registry = LLMProviderRegistry(environment=environment)
     port = FinanceDemoLlmRagPort(
         repository=repository,
         source_root=SOURCE_ROOT,
@@ -148,6 +150,7 @@ def test_provider_default_is_local(
     assert payload["current"] == "local"
     ids = [item["id"] for item in payload["providers"]]
     assert ids == ["local", "cloud"]
+    assert payload["cloud_key_configured"] is True
 
 
 def test_provider_response_never_leaks_credentials(
@@ -260,3 +263,57 @@ def test_query_runs_after_switch_to_cloud(
     raw = json.dumps(payload, ensure_ascii=False)
     assert "test-cloud-key" not in raw
     assert "api.deepseek.com" not in raw
+
+
+def test_provider_cloud_runtime_key_injected_not_leaked(
+    file_executor, demo_identities, monkeypatch
+) -> None:
+    """Frontend-typed DeepSeek key: injected at switch time, never leaked.
+
+    Environment has no cloud key; the demo UI supplies one at runtime.
+    After injection the BFF reports cloud_key_configured=True, a follow-up
+    switch without a key keeps working, and the key never appears in any
+    BFF response (including the query result).
+    """
+    from conftest import AsgiClient
+
+    env = dict(_demo_environment())
+    env["RAG_LLM_API_KEY"] = ""
+    app, registry, _port, version = _build_app(
+        file_executor, demo_identities, monkeypatch, environment=env
+    )
+    client = AsgiClient(app)
+    client.post(
+        "/api/session/login",
+        json_body={"username": "alice", "password": "demo-a-password"},
+    )
+
+    initial = client.get("/api/llm/provider").json()
+    assert initial["current"] == "local"
+    assert initial["cloud_key_configured"] is False
+
+    switch = client.post(
+        "/api/llm/provider",
+        json_body={"provider": "cloud", "api_key": "runtime-key-123"},
+    )
+    assert switch.status_code == 200
+    payload = switch.json()
+    assert payload["current"] == "cloud"
+    assert payload["cloud_key_configured"] is True
+    assert registry.current == "cloud"
+    assert "runtime-key-123" not in switch.content.decode("utf-8")
+
+    again = client.post(
+        "/api/llm/provider", json_body={"provider": "cloud"}
+    )
+    assert again.status_code == 200
+    assert again.json()["cloud_key_configured"] is True
+
+    RecordingHttpxClient.requests = []
+    query = client.post(
+        "/api/retrieval/query",
+        json_body={"question": "该客户资金情况如何？", "asset_id": version.asset_id},
+    )
+    assert query.status_code == 200
+    assert query.json()["status"] == "ANSWERED"
+    assert "runtime-key-123" not in query.content.decode("utf-8")

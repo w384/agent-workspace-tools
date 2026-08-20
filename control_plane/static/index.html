@@ -73,12 +73,23 @@
           <p>仅对当前会话授权可见的已激活版本做检索。</p>
           <div class="model-switch" id="model-switch">
   <h3>问答模型</h3>
-  <div class="model-switch-buttons" role="group" aria-label="问答模型选择">
-    <button type="button" class="model-btn" data-provider="local">本地模型</button>
-    <button type="button" class="model-btn" data-provider="cloud">联网模型</button>
-  </div>
-  <p id="model-status" class="status"></p>
-</div>
+          <div class="model-switch-buttons" role="group" aria-label="问答模型选择">
+            <button type="button" class="model-btn" data-provider="local">本地模型</button>
+            <button type="button" class="model-btn" data-provider="cloud">联网模型</button>
+          </div>
+          <div id="cloud-key-panel" class="cloud-key-panel hidden">
+            <label class="cloud-key-label">
+              DeepSeek API Key
+              <input id="cloud-api-key" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false" />
+            </label>
+            <div class="cloud-key-actions">
+              <button type="button" id="cloud-key-confirm">确认并切换</button>
+              <button type="button" id="cloud-key-cancel" class="ghost">取消</button>
+            </div>
+            <p class="muted">Key 仅保存在当前浏览器会话与 BFF 内存，不会写入服务器或审计记录。</p>
+          </div>
+          <p id="model-status" class="status"></p>
+        </div>
 
           <form id="qa-form">
             <input type="hidden" name="file_name" value="" />

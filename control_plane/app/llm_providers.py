@@ -72,6 +72,7 @@ class LLMProviderRegistry:
     def __init__(self, *, environment: Mapping[str, str] | None = None) -> None:
         self._environment = os.environ if environment is None else environment
         self._current = LOCAL_PROVIDER_ID
+        self._cloud_api_key_override: str | None = None
         self._answer_generator: object | None = self._build(LOCAL_PROVIDER_ID)
 
     @property
@@ -96,13 +97,27 @@ class LLMProviderRegistry:
             ),
         ]
 
-    def switch(self, provider_id: str) -> bool:
+    @property
+    def cloud_key_configured(self) -> bool:
+        """True when a cloud (DeepSeek) API key is available in memory/env.
+
+        Only the boolean is surfaced to the BFF/frontend; the key itself is
+        never exposed in responses or audits.
+        """
+        if self._cloud_api_key_override:
+            return True
+        return bool(_cloud_secrets(self._environment).api_key)
+
+    def switch(self, provider_id: str, api_key: str | None = None) -> bool:
         if provider_id not in (LOCAL_PROVIDER_ID, CLOUD_PROVIDER_ID):
             raise ValueError(f"unknown LLM provider: {provider_id}")
+        if api_key and api_key.strip():
+            # Runtime-injected key (typed into the demo UI). Held in memory
+            # only; never persisted, never echoed in responses or audits.
+            self._cloud_api_key_override = api_key.strip()
         self._answer_generator = self._build(provider_id)
         self._current = provider_id
         return True
-
     def _build(self, provider_id: str) -> object | None:
         secrets = (
             _local_secrets(self._environment)
@@ -111,7 +126,12 @@ class LLMProviderRegistry:
         )
         environment = dict(self._environment)
         environment["RAG_LLM_BASE_URL"] = secrets.base_url
-        environment["RAG_LLM_API_KEY"] = secrets.api_key
+        if provider_id == CLOUD_PROVIDER_ID:
+            environment["RAG_LLM_API_KEY"] = (
+                self._cloud_api_key_override or secrets.api_key
+            )
+        else:
+            environment["RAG_LLM_API_KEY"] = secrets.api_key
         environment["RAG_LLM_MODEL"] = secrets.model
         try:
             return build_llm_answer_generator(environment)

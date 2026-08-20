@@ -106,17 +106,23 @@ class FinanceDemoLlmRagPort:
             "finance demo bridge does not ingest arbitrary uploaded files"
         )
 
-    def set_provider(self, provider_id: str) -> None:
+    def set_provider(self, provider_id: str, api_key: str | None = None) -> None:
         """Switch the path-B answer provider at runtime."""
         if self._providers is None:
             raise RuntimeError("provider switching is not wired for this bridge")
-        self._providers.switch(provider_id)
+        self._providers.switch(provider_id, api_key=api_key)
         self._query_port.set_answer_generator(self._providers.answer_generator)
 
     def current_provider(self) -> str:
         if self._providers is None:
             raise RuntimeError("provider switching is not wired for this bridge")
         return self._providers.current
+
+    def cloud_key_configured(self) -> bool:
+        """Whether a cloud (DeepSeek) key is available (env or runtime)."""
+        if self._providers is None:
+            return False
+        return bool(self._providers.cloud_key_configured)
 
     def provider_descriptors(self) -> list[object]:
         if self._providers is None:

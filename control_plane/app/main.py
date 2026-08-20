@@ -62,6 +62,7 @@ class RagQueryRequest(BaseModel):
 
 class ProviderSwitchRequest(BaseModel):
     provider: str
+    api_key: str | None = None
 
 
 class ControlledSampleAssessRequest(BaseModel):
@@ -405,7 +406,16 @@ def create_app(
             {"id": descriptor.id, "label": descriptor.label}
             for descriptor in rag.provider_descriptors()
         ]
-        return {"current": rag.current_provider(), "providers": providers}
+        cloud_key_configured = (
+            bool(rag.cloud_key_configured())
+            if hasattr(rag, "cloud_key_configured")
+            else False
+        )
+        return {
+            "current": rag.current_provider(),
+            "providers": providers,
+            "cloud_key_configured": cloud_key_configured,
+        }
 
     @app.post("/api/llm/provider")
     def llm_provider_switch(
@@ -417,14 +427,23 @@ def create_app(
             raise ApiError(404, "provider_switching_unavailable", "Provider switching is not available")
         provider_id = request.provider.strip()
         try:
-            rag.set_provider(provider_id)
+            rag.set_provider(provider_id, api_key=request.api_key)
         except (ValueError, RuntimeError) as error:
             raise ApiError(422, "unknown_provider", str(error)) from error
         providers = [
             {"id": descriptor.id, "label": descriptor.label}
             for descriptor in rag.provider_descriptors()
         ]
-        return {"current": rag.current_provider(), "providers": providers}
+        cloud_key_configured = (
+            bool(rag.cloud_key_configured())
+            if hasattr(rag, "cloud_key_configured")
+            else False
+        )
+        return {
+            "current": rag.current_provider(),
+            "providers": providers,
+            "cloud_key_configured": cloud_key_configured,
+        }
 
     @app.post("/api/rule-sets")
     def create_rule_set(
