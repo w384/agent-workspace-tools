@@ -449,7 +449,7 @@ def _multipart_body(
                 (
                     f'Content-Disposition: form-data; name="{name}"; '
                     f'filename="{file_name}"\r\n'
-                ).encode("ascii"),
+                ).encode("utf-8"),
                 f"Content-Type: {content_type}\r\n\r\n".encode("ascii"),
                 content,
                 b"\r\n",

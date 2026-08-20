@@ -1,5 +1,6 @@
 """Demo-only PDF/DOCX parser for the controlled sample source directory."""
 
+import io
 from pathlib import Path, PurePosixPath
 
 from docx import Document
@@ -24,6 +25,26 @@ class DemoDocumentParser:
             return _parse_docx(source_path, request)
         raise ValueError("demo parser does not support this MIME type")
 
+    def parse_bytes(
+        self,
+        request: IngestionRequest,
+        content: bytes,
+    ) -> tuple[Chunk, ...]:
+        """Parse an in-memory PDF/DOCX payload (real uploaded material).
+
+        Used by the demo upload pipeline: the BFF never writes uploaded bytes
+        to disk, so the parser consumes a BytesIO stream instead of a file on
+        the controlled source root.
+        """
+        if not content:
+            raise ValueError("demo parser received empty content")
+        stream = io.BytesIO(content)
+        if request.mime_type == PDF_MIME_TYPE:
+            return _parse_pdf(stream, request)
+        if request.mime_type == DOCX_MIME_TYPE:
+            return _parse_docx(stream, request)
+        raise ValueError("demo parser does not support this MIME type")
+
     def _resolve_source(self, source_ref: str) -> Path:
         relative = PurePosixPath(source_ref)
         if relative.is_absolute() or ".." in relative.parts:
@@ -38,9 +59,9 @@ class DemoDocumentParser:
         return source_path
 
 
-def _parse_pdf(source_path: Path, request: IngestionRequest) -> tuple[Chunk, ...]:
+def _parse_pdf(source, request: IngestionRequest) -> tuple[Chunk, ...]:
     chunks: list[Chunk] = []
-    for page_number, page in enumerate(PdfReader(source_path).pages, start=1):
+    for page_number, page in enumerate(PdfReader(source).pages, start=1):
         text = (page.extract_text() or "").strip()
         if not text:
             continue
@@ -56,9 +77,9 @@ def _parse_pdf(source_path: Path, request: IngestionRequest) -> tuple[Chunk, ...
     return tuple(chunks)
 
 
-def _parse_docx(source_path: Path, request: IngestionRequest) -> tuple[Chunk, ...]:
+def _parse_docx(source, request: IngestionRequest) -> tuple[Chunk, ...]:
     chunks: list[Chunk] = []
-    for paragraph_index, paragraph in enumerate(Document(source_path).paragraphs):
+    for paragraph_index, paragraph in enumerate(Document(source).paragraphs):
         text = paragraph.text.strip()
         if not text:
             continue

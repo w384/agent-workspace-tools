@@ -91,6 +91,22 @@
           <p id="model-status" class="status"></p>
         </div>
 
+          <div class="file-picker upload-picker">
+            <h3>上传真实材料（自动建库）</h3>
+            <p class="muted">
+              上传真实 PDF/DOCX（≤2MB）后自动解析进向量索引，仅上传者有权检索该文件。
+            </p>
+            <div class="upload-row">
+              <input id="qa-upload-picker" type="file" accept=".pdf,.docx" />
+              <button type="button" id="qa-upload-btn">上传并建库</button>
+            </div>
+            <p id="qa-upload-status" class="file-status">未上传文件。</p>
+            <div id="qa-uploaded-list" class="uploaded-list hidden">
+              <h4>已上传材料（点击选择后提问）</h4>
+              <ul id="qa-uploaded-items"></ul>
+            </div>
+          </div>
+
           <form id="qa-form">
             <input type="hidden" name="file_name" value="" />
             <label>

@@ -18,6 +18,10 @@
   );
 
   let cloudKeyConfigured = false;
+  // 会话内已上传的真实材料（自动建库），登出时清空
+  let qaUploadedFiles = [];
+  // 当前问答选中的文件：{ name, kind: "uploaded" | "controlled" }
+  let qaSelectedFile = null;
 
   function setStatus(message) {
     $("#login-status").textContent = message;
@@ -35,6 +39,23 @@
       method: options.method || "POST",
       headers: options.body ? { "Content-Type": "application/json" } : undefined,
       body: options.body ? JSON.stringify(options.body) : undefined,
+      credentials: "same-origin",
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = payload.error ? payload.error.code : "request_failed";
+      const error = new Error(detail);
+      error.status = response.status;
+      error.payload = payload;
+      throw error;
+    }
+    return payload;
+  }
+
+  async function multipartRequest(path, formData) {
+    const response = await fetch(path, {
+      method: "POST",
+      body: formData,
       credentials: "same-origin",
     });
     const payload = await response.json().catch(() => ({}));
@@ -269,6 +290,7 @@
     const qr = $("#qa-result");
     if (qr) qr.replaceChildren();
     resetControlledFilePickers();
+    resetUploadedMaterials();
     activateTab("assessment");
     const status = $("#login-status");
     if (status) status.textContent = "已登出。";
@@ -291,6 +313,95 @@
     });
     const note = $("#file-picker-note");
     if (note) note.classList.add("hidden");
+  }
+
+  function resetUploadedMaterials() {
+    qaUploadedFiles = [];
+    qaSelectedFile = null;
+    const wrap = $("#qa-uploaded-list");
+    if (wrap) wrap.classList.add("hidden");
+    const list = $("#qa-uploaded-items");
+    if (list) list.replaceChildren();
+    const picker = $("#qa-upload-picker");
+    if (picker) picker.value = "";
+    const status = $("#qa-upload-status");
+    if (status) {
+      status.className = "file-status";
+      status.textContent = "未上传文件。";
+    }
+  }
+
+  function renderUploadedFiles() {
+    const wrap = $("#qa-uploaded-list");
+    const list = $("#qa-uploaded-items");
+    if (!wrap || !list) return;
+    list.replaceChildren();
+    qaUploadedFiles.forEach((name) => {
+      const item = el("li", "uploaded-file");
+      const btn = el("button", "uploaded-file-btn", name);
+      btn.type = "button";
+      btn.addEventListener("click", () => selectUploadedFile(name));
+      item.appendChild(btn);
+      list.appendChild(item);
+    });
+    wrap.classList.toggle("hidden", qaUploadedFiles.length === 0);
+  }
+
+  function selectUploadedFile(name) {
+    qaSelectedFile = { name: name, kind: "uploaded" };
+    const hiddenField = $('[name="file_name"]');
+    if (hiddenField) hiddenField.value = "";
+    const status = $("#qa-upload-status");
+    if (status) {
+      status.className = "file-status file-status-ok";
+      status.textContent = "已选择：" + name + "。点击「提问」开始检索。";
+    }
+    const qaStatus = $("#qa-file-picker-status");
+    if (qaStatus) {
+      qaStatus.className = "file-status";
+      qaStatus.textContent = "未选择文件。";
+    }
+    document.querySelectorAll(".uploaded-file-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.textContent === name);
+    });
+  }
+
+  async function uploadRealMaterial() {
+    const picker = $("#qa-upload-picker");
+    const status = $("#qa-upload-status");
+    const file = picker && picker.files && picker.files[0];
+    if (!file) {
+      if (status) {
+        status.className = "file-status file-status-error";
+        status.textContent = "请先选择要上传的真实材料（PDF/DOCX）。";
+      }
+      return;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+    if (status) {
+      status.className = "file-status";
+      status.textContent = "正在上传并建库…";
+    }
+    try {
+      const payload = await multipartRequest("/api/demo/knowledge/upload", formData);
+      if (!qaUploadedFiles.includes(payload.file_name)) {
+        qaUploadedFiles.push(payload.file_name);
+      }
+      renderUploadedFiles();
+      selectUploadedFile(payload.file_name);
+      if (picker) picker.value = "";
+      if (status) {
+        status.className = "file-status file-status-ok";
+        status.textContent =
+          "已上传并建库：" + payload.file_name + "（已自动选择，可直接提问）";
+      }
+    } catch (error) {
+      if (status) {
+        status.className = "file-status file-status-error";
+        status.textContent = "上传失败：" + error.message;
+      }
+    }
   }
 
   function activateTab(target) {
@@ -344,6 +455,18 @@
     const names = files.map((file) => file.name);
     const hiddenField = isQa ? $('[name="file_name"]') : $('[name="file_names"]');
     if (hiddenField) hiddenField.value = names.join(",");
+    if (isQa) {
+      qaSelectedFile = { name: names[0], kind: "controlled" };
+      const uploadStatus = $("#qa-upload-status");
+      if (uploadStatus) {
+        uploadStatus.className = "file-status";
+        uploadStatus.textContent =
+          "已选择受控样例：" + names[0] + "。点击「提问」开始分析。";
+      }
+      document.querySelectorAll(".uploaded-file-btn").forEach((btn) => {
+        btn.classList.remove("active");
+      });
+    }
   }
 
   async function assess(event) {
@@ -385,24 +508,36 @@
       ? new FormData(event.currentTarget)
       : new FormData($("#qa-form"));
     const result = $("#qa-result");
+    const question = (form.get("question") || "").trim();
+    if (!question) {
+      result.replaceChildren(el("p", "report-error", "请先输入问题。"));
+      return;
+    }
     const hiddenFile = $('[name="file_name"]');
-    const fileNames = hiddenFile && hiddenFile.value
+    const controlledNames = hiddenFile && hiddenFile.value
       ? hiddenFile.value.split(",").filter(Boolean)
       : collectControlledFileNames($("#qa-file-picker"));
-    if (!fileNames.length) {
+    let targetFile = null;
+    if (qaSelectedFile && qaSelectedFile.kind === "uploaded") {
+      targetFile = qaSelectedFile.name;
+    } else if (controlledNames.length) {
+      targetFile = controlledNames[0];
+      qaSelectedFile = { name: targetFile, kind: "controlled" };
+    }
+    if (!targetFile) {
       result.replaceChildren(
-        el("p", "report-error", "请先选择受控样例文件（资产 ID 已对演示隐藏）。")
+        el("p", "report-error", "请先选择受控样例或上传真实材料后再提问。")
       );
       return;
     }
     result.replaceChildren();
     result.appendChild(el("p", "report-empty", "正在检索并生成回答…"));
+    const endpoint = qaSelectedFile.kind === "uploaded"
+      ? "/api/demo/knowledge/query"
+      : "/api/controlled-sample/query";
     try {
-      const payload = await jsonRequest("/api/controlled-sample/query", {
-        body: {
-          question: form.get("question"),
-          file_name: fileNames[0],
-        },
+      const payload = await jsonRequest(endpoint, {
+        body: { question: question, file_name: targetFile },
       });
       renderQaResult(payload);
     } catch (error) {
@@ -565,6 +700,8 @@
   if (qaFilePicker) {
     qaFilePicker.addEventListener("change", handleFileSelection);
   }
+  const qaUploadBtn = $("#qa-upload-btn");
+  if (qaUploadBtn) qaUploadBtn.addEventListener("click", uploadRealMaterial);
   document.querySelectorAll(".tab").forEach((button) => {
     button.addEventListener("click", switchTab);
   });

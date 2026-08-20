@@ -259,6 +259,70 @@ button[type="submit"]:hover {
   color: var(--muted);
 }
 
+/* 真实材料上传（自动建库） */
+.upload-picker {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.upload-picker h3 {
+  color: #1d4ed8;
+}
+
+.upload-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.upload-row input[type="file"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.uploaded-list {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #bfdbfe;
+}
+
+.uploaded-list h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: #1d4ed8;
+}
+
+.uploaded-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.uploaded-file-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.uploaded-file-btn:hover {
+  border-color: #2563eb;
+}
+
+.uploaded-file-btn.active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
 /* 评估报告区 */
 .report-area {
   margin-top: 4px;

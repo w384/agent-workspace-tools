@@ -13,6 +13,7 @@ paths operate over the same controlled evidence set.
 
 from __future__ import annotations
 
+import hashlib
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -79,8 +80,8 @@ class FinanceDemoLlmRagPort:
         # threshold is 0.0 so the top ranked chunks become the evidence;
         # the "evidence insufficient" REFUSED path still triggers whenever
         # retrieval returns nothing (no index / no authorized chunks).
-        search_index = InMemorySearchIndex(scorer=make_retrieval_scorer())
-        self._index_declared_samples(search_index)
+        self._search_index = InMemorySearchIndex(scorer=make_retrieval_scorer())
+        self._index_declared_samples(self._search_index)
 
         if providers is not None:
             self._providers = providers
@@ -91,7 +92,7 @@ class FinanceDemoLlmRagPort:
                 answer_generator = _build_default_answer_generator()
         self._query_port = DemoRagPort(
             repository=repository,
-            search_index=search_index,
+            search_index=self._search_index,
             minimum_evidence_score=0.0,
             answer_generator=answer_generator,
         )
@@ -105,6 +106,60 @@ class FinanceDemoLlmRagPort:
         raise RuntimeError(
             "finance demo bridge does not ingest arbitrary uploaded files"
         )
+
+    def ingest_uploaded_version(
+        self,
+        actor: TrustedActorContext,
+        asset_version: AssetVersion,
+        content: bytes,
+        request_id: str,
+    ) -> int:
+        """Build the in-memory vector index for one real uploaded document.
+
+        Verifies the recorded SHA-256 fingerprint against the actual payload,
+        parses the bytes (PDF/DOCX) via the demo parser, atomically replaces
+        the search-index slice, walks the version state machine
+        queued -> parsing -> indexed -> ready and activates the version. The
+        upload itself is authorized by the BFF before this is called; the
+        uploader is then granted QUERY on the exact file path.
+        """
+        expected = "sha256:" + hashlib.sha256(content).hexdigest()
+        if asset_version.content_fingerprint != expected:
+            raise ValueError("uploaded content fingerprint mismatch")
+        parser = DemoDocumentParser(self._source_root)
+        request = IngestionRequest(
+            tenant_id=self._workspace_id,
+            target_version=ActiveAssetVersion(
+                asset_version.asset_id,
+                asset_version.asset_version_id,
+            ),
+            source_ref=asset_version.source_path,
+            content_fingerprint=asset_version.content_fingerprint,
+            mime_type=_mime_type_for(asset_version.source_path),
+            size_bytes=len(content),
+        )
+        chunks = parser.parse_bytes(request, content)
+        if not chunks:
+            raise ValueError("uploaded document parsed to no chunks")
+        self._search_index.replace_version(
+            tenant_id=self._workspace_id,
+            active_version=ActiveAssetVersion(
+                asset_version.asset_id,
+                asset_version.asset_version_id,
+            ),
+            chunks=chunks,
+        )
+        self._repository.transition_asset_version(
+            asset_version.asset_version_id, "parsing"
+        )
+        self._repository.transition_asset_version(
+            asset_version.asset_version_id, "indexed"
+        )
+        self._repository.transition_asset_version(
+            asset_version.asset_version_id, "ready"
+        )
+        self._repository.activate_asset_version(asset_version.asset_version_id)
+        return len(chunks)
 
     def set_provider(self, provider_id: str, api_key: str | None = None) -> None:
         """Switch the path-B answer provider at runtime."""

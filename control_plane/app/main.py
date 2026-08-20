@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import json
 from dataclasses import asdict
@@ -11,7 +12,13 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .domain import TrustedActorContext
+from .domain import (
+    Action,
+    AuditEvent,
+    PermissionGrant,
+    PrincipalType,
+    TrustedActorContext,
+)
 from .ports import FileExecutorPort, RagPort
 from .repository import ControlPlaneRepository
 from .service import (
@@ -44,6 +51,13 @@ from .sessions import (
     authenticate_demo_identity,
 )
 
+from service.app.rag.parser_worker import DOCX_MIME_TYPE, PDF_MIME_TYPE
+
+
+UPLOADED_DIR = "客户上传资料"
+MAX_KNOWLEDGE_UPLOAD_BYTES = 2 * 1024 * 1024
+ALLOWED_KNOWLEDGE_EXTENSIONS = frozenset({".pdf", ".docx"})
+
 
 class LoginRequest(BaseModel):
     username: str
@@ -72,6 +86,11 @@ class ControlledSampleAssessRequest(BaseModel):
 
 
 class ControlledSampleQueryRequest(BaseModel):
+    question: str
+    file_name: str
+
+
+class KnowledgeQueryRequest(BaseModel):
     question: str
     file_name: str
 
@@ -392,6 +411,161 @@ def create_app(
                 f"Not a controlled sample file: {file_name}",
             )
         return rag.query(actor, question, asset.asset_id)
+
+    @app.post("/api/demo/knowledge/upload")
+    async def knowledge_upload(
+        file: UploadFile = File(...),
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        """Real-material upload -> SHA-256 fingerprint -> auto index + activate.
+
+        The BFF owns validation and fingerprinting; the composite bridge parses
+        the bytes into the in-memory vector index, walks the version state
+        machine to ready and activates it. The uploader is then granted QUERY
+        on the exact uploaded file path, so they can query their own material.
+        Audit events never retain file content or credentials.
+        """
+        rag = app.state.rag_port
+        if not hasattr(rag, "ingest_uploaded_version"):
+            raise ApiError(
+                404,
+                "knowledge_upload_unavailable",
+                "Knowledge upload bridge is not available",
+            )
+        file_name = _require_upload_file_name(file.filename or "")
+        extension = Path(file_name).suffix.lower()
+        if extension not in ALLOWED_KNOWLEDGE_EXTENSIONS:
+            raise ApiError(
+                422,
+                "unsupported_file_type",
+                "Only PDF/DOCX uploads are supported",
+            )
+        content = await file.read()
+        if not content:
+            raise ApiError(422, "empty_file", "Uploaded file is empty")
+        if len(content) > MAX_KNOWLEDGE_UPLOAD_BYTES:
+            raise ApiError(
+                422,
+                "file_too_large",
+                "Uploaded file exceeds the 2MB demo limit",
+            )
+        path = f"{UPLOADED_DIR}/{file_name}"
+        repository = app.state.repository
+        if repository.find_asset_by_path(actor.workspace_id, path) is not None:
+            raise ApiError(
+                409,
+                "upload_target_exists",
+                "Upload target already exists",
+            )
+        content_fingerprint = "sha256:" + hashlib.sha256(content).hexdigest()
+        asset = repository.get_or_create_asset(
+            actor.workspace_id, path, file_name, actor.actor_id
+        )
+        asset_version = repository.create_asset_version(
+            asset.asset_id, content_fingerprint, path
+        )
+        try:
+            chunk_count = rag.ingest_uploaded_version(
+                actor=actor,
+                asset_version=asset_version,
+                content=content,
+                request_id=actor.request_id,
+            )
+        except (ValueError, RuntimeError) as error:
+            raise ApiError(
+                502,
+                "knowledge_ingest_failed",
+                "Knowledge index build failed",
+            ) from error
+        repository.add_permission_grant(
+            PermissionGrant(
+                grant_id=_new_id(),
+                workspace_id=actor.workspace_id,
+                context_version=actor.context_version,
+                principal_type=PrincipalType.USER,
+                principal_id=actor.actor_id,
+                action=Action.QUERY,
+                path_prefix=path,
+            )
+        )
+        _append_knowledge_audit(
+            repository,
+            actor,
+            "upload_authorized",
+            {
+                "file_name": file_name,
+                "size_bytes": len(content),
+                "mime_type": _knowledge_mime_label(extension),
+            },
+        )
+        _append_knowledge_audit(
+            repository,
+            actor,
+            "asset_version_created",
+            {
+                "asset_id": asset.asset_id,
+                "asset_version_id": asset_version.asset_version_id,
+            },
+        )
+        _append_knowledge_audit(
+            repository,
+            actor,
+            "query_grant_added",
+            {
+                "asset_id": asset.asset_id,
+                "path_prefix": path,
+                "principal_id": actor.actor_id,
+            },
+        )
+        _append_knowledge_audit(
+            repository,
+            actor,
+            "asset_version_activated",
+            {
+                "asset_id": asset.asset_id,
+                "asset_version_id": asset_version.asset_version_id,
+            },
+        )
+        return {
+            "asset_id": asset.asset_id,
+            "file_name": file_name,
+            "path": path,
+            "version_id": asset_version.asset_version_id,
+            "chunk_count": chunk_count,
+            "index_state": "ready",
+            "content_fingerprint": content_fingerprint,
+        }
+
+    @app.post("/api/demo/knowledge/query")
+    def knowledge_query(
+        request: KnowledgeQueryRequest,
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> Mapping[str, object]:
+        """Query one uploaded real material file by its file name.
+
+        The BFF resolves the uploaded asset path (客户上传资料/<file_name>) and
+        delegates to the composite bridge query, which still decides
+        authorization inside DemoRagPort on the resolved asset path.
+        """
+        question = request.question.strip()
+        if not question:
+            raise ApiError(422, "question_required", "Question is required")
+        file_name = request.file_name.strip()
+        if not file_name:
+            raise ApiError(422, "file_name_required", "File name is required")
+        if not _is_safe_file_name(file_name):
+            raise ApiError(422, "invalid_file_name", "File name is not allowed")
+        path = f"{UPLOADED_DIR}/{file_name}"
+        asset = app.state.repository.find_asset_by_path(
+            actor.workspace_id, path
+        )
+        if asset is None:
+            raise ApiError(
+                404,
+                "uploaded_file_not_found",
+                "Uploaded file not found",
+            )
+        return app.state.rag_port.query(actor, question, asset.asset_id)
 
 
 
@@ -748,3 +922,44 @@ def _resolve_rule_content_fingerprint(
 
 def _new_id() -> str:
     return str(uuid4())
+
+
+def _is_safe_file_name(file_name: str) -> bool:
+    """Reject empty, hidden, absolute and path-traversal file names."""
+    if not file_name or file_name.startswith("."):
+        return False
+    if "/" in file_name or "\\" in file_name or ".." in file_name:
+        return False
+    return True
+
+
+def _require_upload_file_name(file_name: str) -> str:
+    name = (file_name or "").strip()
+    if not _is_safe_file_name(name):
+        raise ApiError(422, "invalid_file_name", "File name is not allowed")
+    return name
+
+
+def _knowledge_mime_label(extension: str) -> str:
+    if extension == ".pdf":
+        return PDF_MIME_TYPE
+    if extension == ".docx":
+        return DOCX_MIME_TYPE
+    raise ApiError(422, "unsupported_file_type", "Only PDF/DOCX uploads are supported")
+
+
+def _append_knowledge_audit(
+    repository,
+    actor: TrustedActorContext,
+    event_type: str,
+    details: Mapping[str, object],
+) -> None:
+    repository.append_audit_event(
+        AuditEvent(
+            event_id=_new_id(),
+            event_type=event_type,
+            actor_id=actor.actor_id,
+            request_id=actor.request_id,
+            details=details,
+        )
+    )
