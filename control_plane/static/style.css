@@ -220,7 +220,7 @@ button[type="submit"]:hover {
 
 /* 受控文件选择 */
 .file-picker {
-  margin: 18px 0 20px;
+  margin: 18px auto 20px;
   padding: 14px 16px;
   border: 1px dashed var(--accent);
   border-radius: 12px;

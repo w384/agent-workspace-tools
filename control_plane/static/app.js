@@ -535,6 +535,7 @@
         status.textContent =
           "已上传并建库：" + payload.file_name + "（已自动选择，可直接提问）";
       }
+      await loadKnowledgeFiles();
     } catch (error) {
       if (status) {
         const dupCode =
@@ -568,6 +569,7 @@
     document.querySelectorAll(".tab-panel").forEach((panel) => {
       panel.classList.toggle("hidden", panel.id !== target);
     });
+    if (target === "knowledge") loadKnowledgeFiles();
   }
 
   function collectControlledFileNames(picker) {

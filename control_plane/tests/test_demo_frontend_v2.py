@@ -143,6 +143,14 @@ def test_demo_frontend_login_panel_centered(client) -> None:
     assert "max-width: 640px" in css
 
 
+def test_demo_frontend_file_picker_centered(client) -> None:
+    # 文件选择块（含上传真实材料区）必须水平居中且不被拉宽；margin:auto 不能被
+    # 后续同优先级 .file-picker 规则覆盖（曾导致上传区顶头）。
+    css = _body(client, "/demo/style.css")
+    assert ".file-picker" in css
+    assert "margin: 18px auto 20px" in css
+
+
 def test_demo_frontend_candidate_banks_rendering(client) -> None:
     app_js = _body(client, "/demo/app.js")
     assert "candidate_banks" in app_js
