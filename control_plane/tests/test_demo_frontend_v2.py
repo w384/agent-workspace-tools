@@ -151,6 +151,17 @@ def test_demo_frontend_file_picker_centered(client) -> None:
     assert "margin: 18px auto 20px" in css
 
 
+def test_demo_frontend_tab_headers_aligned_and_scrollbar_stable(client) -> None:
+    # 三个 tab 页的标题与描述说明收进 640px 居中列，与内容块对齐
+    css = _body(client, "/demo/style.css")
+    assert ".tab-panel h2," in css
+    assert ".tab-panel > p" in css
+    assert "max-width: 640px" in css
+    # 始终为垂直滚动条预留空间，页面高度不同（tab 切换）时不产生横向位移
+    assert "scrollbar-gutter: stable" in css
+    assert "overflow-y: scroll" in css
+
+
 def test_demo_frontend_candidate_banks_rendering(client) -> None:
     app_js = _body(client, "/demo/app.js")
     assert "candidate_banks" in app_js

@@ -16,6 +16,12 @@
   box-sizing: border-box;
 }
 
+html {
+  /* 始终为垂直滚动条预留空间：三个 tab 页高度不同时切换不产生横向位移 */
+  scrollbar-gutter: stable;
+  overflow-y: scroll;
+}
+
 body {
   margin: 0;
   font-family: system-ui, "Microsoft YaHei", sans-serif;
@@ -40,6 +46,14 @@ body {
 #qa-hint,
 .model-switch,
 #login-panel {
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 三个 tab 页的标题与描述说明也收进 640px 居中列，与内容块对齐 */
+.tab-panel h2,
+.tab-panel > p {
   max-width: 640px;
   margin-left: auto;
   margin-right: auto;
