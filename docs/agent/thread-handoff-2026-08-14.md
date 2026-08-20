@@ -45,7 +45,8 @@
   3. 模型本地/联网切换：✅ 已完成（c0b9c7f + llm_providers.py，本地默认 Ollama qwen3.5:9b / 联网 DeepSeek；联网工具维修中，Q 暂不启用）。
   4. 登出清空结果区：✅ 已完成（046ead6，避免切换身份看到上一用户残留报告）。
   5. 前端 /demo 人工演示：待 Q 排期（视觉 QA 并入此项）。
-  - 尚未开始 / 挂起：origin 推送（待 Q 授权或独立审计最终复核）；Dify 实机接入（P1-2）、真实上传（P1-1）、LLM 生产化降级/多租户（P1-3）均为 Backlog 项。
+  6. 真实上传自动建库（P1-1）：✅ 已完成（5227ed3，知识库问答 tab 新增「上传真实材料（自动建库）」：BFF POST /api/demo/knowledge/upload 不落盘、SHA-256 指纹 + PDF/DOCX parse_bytes + 向量索引 replace_version + 版本状态机 ready + activate + 上传者自动 QUERY grant；POST /api/demo/knowledge/query 按文件名查询；登出清空已上传列表。14 新测试 + 控制面 142 / service 156 / RAG LLM 20 全绿，证据回填 checklist）。
+  - 尚未开始 / 挂起：origin 推送（待 Q 授权或独立审计最终复核）；Dify 实机接入（P1-2）、LLM 生产化降级/多租户（P1-3）为 Backlog 项；真实上传（P1-1）✅ 已完成（5227ed3，见上方待办 6）。
   - 历史已完成（v2 期间）：集成证据回填 checklist（5507416）、test_windows_auto_start.py 改名遗留（146 passed）、真实 LLM smoke test、待提交项拆分（A=22f61d8/B=3d9dcf8+8324902/C=7f0f153/D=5507416）、work/demo/public-drive-ai-organizing 忽略裁定。
 - 在途项（2026-08-18 控制面 v2 派单 07 回报，79e8 工作树未提交；总集成已只读核验并裁决）：
   - ✅ v3 已回填（2026-08-18）：RAG 4c0b bank_label 已合入 main（11b9066）；控制面 E2/E4/E5 已合入 main（80e4e0c）；E3 初始化脚本已合入（d9007f6）；集成回归 control_plane 101 / RAG LLM 20 / service 146 全绿；runbook 步骤 4 补 E5 操作说明（1477b50）。

@@ -124,6 +124,23 @@ git diff --check
 - 提交链（main，未推送 origin）：a33a5a8（此前向量检索）→ 0b40a58 feat(control_plane) 前端 DeepSeek API key 运行时填写（7 files +217/-20）→ 2311048 feat(rag) 样例伪造资产确定性构建（9 files +164/-47）。
 - 红线：未 push origin、未建分支、main 直链保持。
 
+## 实际结果（2026-08-20 实测 · v3 真实上传自动建库管线最终证据）
+
+背景：Q 指示「新上传的真实材料，它的知识库是怎么建立的？」——需把 Backlog P1-1「真实文件上传→自动解析/索引闭环」落地。本轮实现完整管线：前端知识库问答 tab 新增「上传真实材料（自动建库）」区 → BFF POST /api/demo/knowledge/upload（multipart，不落盘、bytes 直入内存索引）→ SHA-256 指纹校验 → DemoDocumentParser.parse_bytes（PDF/DOCX，BytesIO 流）→ 字符 n-gram 向量索引 replace_version 原子替换 → 版本状态机 queued→parsing→indexed→ready + activate → 上传者自动加 QUERY grant（path_prefix=客户上传资料/<文件名>）→ 4 条审计事件（不落内容/凭据）；POST /api/demo/knowledge/query 按文件名解析资产路径后委托 rag_port.query（授权仍由 DemoRagPort 前置）。前端登出时清空已上传列表与选中态（复用既有「登出清空」口径）。
+
+- 新增后端测试（test_knowledge_upload_bridge.py，14 项）：14 passed in 0.62s
+  - DOCX 上传 → index_state=ready、content_fingerprint 绑定真实 SHA-256、asset.active_version_id=version_id（状态机+激活闭环）。
+  - 上传者（alice）查自己上传文件 → 200 ANSWERED、answer="LLM 依据授权证据生成的回答"、llm_invoked=True、retrieved_count≥1、citations 绑定 asset_id+asset_version_id、LLM 调用 1 次。
+  - PDF 上传 → index_state=ready、chunk_count≥1、真实指纹。
+  - bob（无 QUERY grant）查 alice 上传文件 → 200 DENIED、reason=ACCESS_DENIED、answer=None、llm_invoked=False、retrieved_count=0、citations=[]、LLM 零调用。
+  - bob 上传并查自己文件 → ANSWERED、llm_invoked=True（上传者自动授权成立）。
+  - 输入守卫：非 PDF/DOCX → 422 unsupported_file_type；超 2MB → 422 file_too_large；路径逃逸 4 例参数化（../escape.pdf/a\b.pdf/.hidden.pdf/dir/a.pdf）→ 422 invalid_file_name；同名重复 → 409 upload_target_exists；查询未知文件 → 404 uploaded_file_not_found。
+  - 审计红线：上传后审计事件不保留文件内容、密码、cp_session、internal_service_key（test_upload_audit_never_retains_content_or_credentials）。
+- 前端静态回归保持：test_demo_frontend_v2「任意上传会被底层拒绝」「受控文件选择」断言未破坏；test_demo_frontend 的 api_key/sk-/D:/C:/internal_service_key/authorization/secret 不出现于静态资源约束未破坏（云 key 输入框 placeholder 为既有 0b40a58 提交内容，非本轮引入）。
+- 集成回归（提权，新鲜原始输出）：control_plane/tests 全量 142 passed in 2.95s（128 基线 + 14 新增）；service/tests 全量 156 passed in 2.15s（parser 改动无回归）；RAG LLM（test_llm_answer_generator + test_llm_explanation_port）20 passed in 0.09s；node --check exit 0；git diff --check exit 0（仅既有 LF 转 CRLF warning）。
+- 提交（main，未推送 origin）：5227ed3 feat(control_plane): 真实上传自动建库（SHA-256 指纹 + PDF/DOCX 解析 + 向量索引 + 授权绑定）（8 files +823/-17，含新增 test_knowledge_upload_bridge.py）。
+- 红线：未 push origin、未建分支、main 直链保持。
+
 ## 关键断言
 
 路径 B（LLM 知识库问答）：
@@ -173,7 +190,7 @@ git diff --check
 ## 残余风险
 
 - 真实 LLM 接入（AnswerGenerator/ExplanationPort + BFF 桥接）：P0 在途，实施归 RAG 后台 + 控制面，执行总负责统筹验收与集成；演示期使用受控 demo LLM 凭证（脱敏），不落前端、不入库明文。
-- 真实上传自动解析与索引：NOT_DONE。
+- 真实上传自动解析与索引：✅ 已完成（5227ed3，内存向量索引 + 真实 SHA-256 指纹 + 上传者自动授权；不落盘，仅演示级内存索引，非生产持久化向量库）。
 - Dify 页面实机解释与 Workflow 追踪：NOT_RUN。
 - Qdrant、真实 PostgreSQL、OS 级无网络/资源隔离 parser sandbox：NOT_DONE。
 - Windows/SMB 独立服务账号、UNC 与 ACL 旁路写验证：NOT_RUN。
