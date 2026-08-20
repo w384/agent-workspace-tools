@@ -60,6 +60,17 @@ def test_demo_frontend_p1_auto_trigger_hides_asset_ids(client) -> None:
     assert 'id="qa-file-picker"' in index
 
 
+def test_demo_frontend_logout_clears_previous_report(client) -> None:
+    # 登出后切换身份登录时，不应残留上一用户生成的评估报告/问答结果。
+    # 修复合入后，logout 必须清空两个结果区，避免跨身份看到旧报告（纯前端残留）。
+    app_js = _body(client, "/demo/app.js")
+    assert "$("#assessment-result")" in app_js
+    assert "$("#qa-result")" in app_js
+    # logout 中应存在对两个结果区的清空调用
+    assert "$("#assessment-result").replaceChildren()" in app_js
+    assert "$("#qa-result").replaceChildren()" in app_js
+
+
 def test_demo_frontend_p1_bff_endpoints_used(client) -> None:
     app_js = _body(client, "/demo/app.js")
     assert "/api/controlled-sample/assess" in app_js

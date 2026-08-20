@@ -262,6 +262,10 @@
     $("#user-area").classList.add("hidden");
     $("#demo-panel").classList.add("hidden");
     $("#login-panel").classList.remove("hidden");
+    const ar = $("#assessment-result");
+    if (ar) ar.replaceChildren();
+    const qr = $("#qa-result");
+    if (qr) qr.replaceChildren();
     const status = $("#login-status");
     if (status) status.textContent = "已登出。";
     $("#login-form").reset();
