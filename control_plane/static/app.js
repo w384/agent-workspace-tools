@@ -266,9 +266,38 @@
     if (ar) ar.replaceChildren();
     const qr = $("#qa-result");
     if (qr) qr.replaceChildren();
+    resetControlledFilePickers();
+    activateTab("assessment");
     const status = $("#login-status");
     if (status) status.textContent = "已登出。";
     $("#login-form").reset();
+  }
+
+  function resetControlledFilePickers() {
+    const pickers = ["#demo-file-picker", "#qa-file-picker"];
+    pickers.forEach((selector) => {
+      const picker = $(selector);
+      if (picker) picker.value = "";
+    });
+    const statuses = ["#file-picker-status", "#qa-file-picker-status"];
+    statuses.forEach((selector) => {
+      const status = $(selector);
+      if (status) {
+        status.className = "file-status";
+        status.textContent = "未选择文件。";
+      }
+    });
+    const note = $("#file-picker-note");
+    if (note) note.classList.add("hidden");
+  }
+
+  function activateTab(target) {
+    document.querySelectorAll(".tab").forEach((button) => {
+      button.classList.toggle("active", button.dataset.tab === target);
+    });
+    document.querySelectorAll(".tab-panel").forEach((panel) => {
+      panel.classList.toggle("hidden", panel.id !== target);
+    });
   }
 
   function collectControlledFileNames(picker) {
@@ -440,12 +469,7 @@
   });
   loadProviderStatus();
 
-  document.querySelectorAll(".tab").forEach((button) => {
-      button.classList.toggle("active", button.dataset.tab === target);
-    });
-    document.querySelectorAll(".tab-panel").forEach((panel) => {
-      panel.classList.toggle("hidden", panel.id !== target);
-    });
+  activateTab(target);
   }
 
   const logoutBtn = $("#logout-btn");

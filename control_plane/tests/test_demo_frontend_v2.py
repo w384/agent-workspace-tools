@@ -62,13 +62,19 @@ def test_demo_frontend_p1_auto_trigger_hides_asset_ids(client) -> None:
 
 def test_demo_frontend_logout_clears_previous_report(client) -> None:
     # 登出后切换身份登录时，不应残留上一用户生成的评估报告/问答结果。
-    # 修复合入后，logout 必须清空两个结果区，避免跨身份看到旧报告（纯前端残留）。
+    # 修复合入后，logout 必须清空两个结果区、重置文件选择器并切回默认 tab，
+    # 避免跨身份看到旧报告/已选文件/停留页面（纯前端残留）。
     app_js = _body(client, "/demo/app.js")
-    assert "$("#assessment-result")" in app_js
-    assert "$("#qa-result")" in app_js
     # logout 中应存在对两个结果区的清空调用
-    assert "$("#assessment-result").replaceChildren()" in app_js
-    assert "$("#qa-result").replaceChildren()" in app_js
+    assert 'if (ar) ar.replaceChildren()' in app_js
+    assert 'if (qr) qr.replaceChildren()' in app_js
+    # logout 中应重置两个受控文件选择器（待上传状态，而非已选文件说明）
+    assert "resetControlledFilePickers()" in app_js
+    assert '$("#demo-file-picker")' in app_js
+    assert '$("#qa-file-picker")' in app_js
+    assert '"未选择文件。"' in app_js
+    # logout 中应切回默认「资料预评估」tab
+    assert 'activateTab("assessment")' in app_js
 
 
 def test_demo_frontend_p1_bff_endpoints_used(client) -> None:
