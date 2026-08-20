@@ -21,7 +21,7 @@ DEMO_SOURCE = (
     Path(__file__).parents[3]
     / "work"
     / "demo"
-    / "public-drive-ai-organizing"
+    / "financial-preassessment"
     / "source"
 )
 PDF_MIME_TYPE = "application/pdf"
@@ -131,13 +131,13 @@ def _ingest(
 def test_demo_rag_pipeline_answers_authorized_pdf_with_versioned_citation():
     repository = InMemoryControlPlaneRepository()
     asset, version = _add_ready_asset(
-        repository, path="验收交付/2026春季新品项目验收清单.pdf"
+        repository, path="客户模拟资料/收入情况说明.pdf"
     )
     _grant(
         repository,
-        grant_id="a-acceptance",
+        grant_id="a-income",
         principal_id="user-a",
-        path_prefix="验收交付",
+        path_prefix="客户模拟资料",
     )
     parser = DemoDocumentParser(DEMO_SOURCE)
     index = InMemorySearchIndex(scorer=lambda _question, _chunk: 0.95)
@@ -148,7 +148,7 @@ def test_demo_rag_pipeline_answers_authorized_pdf_with_versioned_citation():
             parser,
             asset_id=asset.asset_id,
             asset_version_id=version.asset_version_id,
-            source_ref="验收交付/2026春季新品项目验收清单.pdf",
+            source_ref="客户模拟资料/收入情况说明.pdf",
             mime_type=PDF_MIME_TYPE,
         ),
     )
@@ -171,27 +171,28 @@ def test_demo_rag_pipeline_answers_authorized_pdf_with_versioned_citation():
             session_id="session-user-a",
             request_id="request-user-a",
         ),
-        question="项目验收要求是什么？",
+        question="2024年度营业收入是多少？",
     )
 
-    assert "验收要求一" in result.answer
+    assert "4,860万元" in result.answer
+    assert "营业收入" in result.answer
     assert result.citations[0].asset_version_id == version.asset_version_id
     assert result.citations[0].page_number == 1
-    assert result.citations[0].current_path == "验收交付/2026春季新品项目验收清单.pdf"
-    assert result.citations[0].version_path == "验收交付/2026春季新品项目验收清单.pdf"
+    assert result.citations[0].current_path == "客户模拟资料/收入情况说明.pdf"
+    assert result.citations[0].version_path == "客户模拟资料/收入情况说明.pdf"
     assert len(reranker.seen) == len(generator.seen) == 1
 
 
 def test_demo_rag_pipeline_denies_sensitive_docx_before_scoring():
     repository = InMemoryControlPlaneRepository()
     asset, version = _add_ready_asset(
-        repository, path="版权授权证明/内部法务评审意见.docx"
+        repository, path="敏感资料/内部资料核验说明.docx"
     )
     _grant(
         repository,
-        grant_id="a-deny-legal",
+        grant_id="a-deny-sensitive",
         principal_id="user-a",
-        path_prefix="版权授权证明",
+        path_prefix="敏感资料",
         effect=GrantEffect.DENY,
     )
     parser = DemoDocumentParser(DEMO_SOURCE)
@@ -209,7 +210,7 @@ def test_demo_rag_pipeline_denies_sensitive_docx_before_scoring():
             parser,
             asset_id=asset.asset_id,
             asset_version_id=version.asset_version_id,
-            source_ref="版权授权证明/内部法务评审意见.docx",
+            source_ref="敏感资料/内部资料核验说明.docx",
             mime_type=DOCX_MIME_TYPE,
         ),
     )
@@ -232,7 +233,7 @@ def test_demo_rag_pipeline_denies_sensitive_docx_before_scoring():
             session_id="session-user-a",
             request_id="request-user-a",
         ),
-        question="内部法务评审意见有哪些版权风险？",
+        question="内部资料核验说明有什么内容？",
     )
 
     assert result.status.value == "DENIED"
@@ -242,4 +243,4 @@ def test_demo_rag_pipeline_denies_sensitive_docx_before_scoring():
     assert scored_chunk_ids == []
     assert reranker.seen == ()
     assert generator.seen == ()
-    assert "库存图片授权期限" not in repr((audit_sink.events, result))
+    assert "普通成员不应查询" not in repr((audit_sink.events, result))

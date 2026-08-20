@@ -22,10 +22,10 @@ DEMO_SOURCE = (
     Path(__file__).parents[2]
     / "work"
     / "demo"
-    / "public-drive-ai-organizing"
+    / "financial-preassessment"
     / "source"
 )
-PDF_PATH = "验收交付/2026春季新品项目验收清单.pdf"
+PDF_PATH = "客户模拟资料/收入情况说明.pdf"
 PDF_MIME_TYPE = "application/pdf"
 
 
@@ -38,7 +38,7 @@ def test_bff_query_returns_real_parsed_pdf_citation_for_authenticated_a(
     client_as_a, repository, demo_identities, file_executor, monkeypatch
 ):
     asset = repository.get_or_create_asset(
-        "workspace-a", PDF_PATH, "2026春季新品项目验收清单.pdf", "user-a"
+        "workspace-a", PDF_PATH, "收入情况说明.pdf", "user-a"
     )
     version = repository.create_asset_version(
         asset.asset_id, "sha256:" + "a" * 64, PDF_PATH
@@ -54,7 +54,7 @@ def test_bff_query_returns_real_parsed_pdf_citation_for_authenticated_a(
             principal_type=PrincipalType.USER,
             principal_id="user-a",
             action=Action.QUERY,
-            path_prefix="验收交付",
+            path_prefix="客户模拟资料",
         )
     )
     parser = DemoDocumentParser(DEMO_SOURCE)
@@ -102,7 +102,7 @@ def test_bff_query_returns_real_parsed_pdf_citation_for_authenticated_a(
     response = client.post(
         "/api/retrieval/query",
         json_body={
-            "question": "项目验收要求是什么？",
+            "question": "2024年度营业收入是多少？",
             "asset_id": asset.asset_id,
         },
     )
@@ -138,10 +138,10 @@ def test_bff_query_denies_a_before_scoring_and_allows_b_explicit_a_b_scope(
         repository, path=LEGAL_PATH, created_by="user-b"
     )
     for grant_id, principal_id, path_prefix, effect in (
-        ("a-allow-acceptance", "user-a", "验收交付", GrantEffect.ALLOW),
-        ("a-deny-legal", "user-a", "版权授权证明", GrantEffect.DENY),
-        ("b-allow-acceptance", "user-b", "验收交付", GrantEffect.ALLOW),
-        ("b-allow-legal", "user-b", "版权授权证明", GrantEffect.ALLOW),
+        ("a-allow-income", "user-a", "客户模拟资料", GrantEffect.ALLOW),
+        ("a-deny-sensitive", "user-a", "敏感资料", GrantEffect.DENY),
+        ("b-allow-income", "user-b", "客户模拟资料", GrantEffect.ALLOW),
+        ("b-allow-sensitive", "user-b", "敏感资料", GrantEffect.ALLOW),
     ):
         repository.add_permission_grant(
             PermissionGrant(
@@ -200,7 +200,7 @@ def test_bff_query_denies_a_before_scoring_and_allows_b_explicit_a_b_scope(
     denied = a_client.post(
         "/api/retrieval/query",
         json_body={
-            "question": "内部法务评审意见有哪些版权风险？",
+            "question": "内部资料核验说明有什么内容？",
             "asset_id": legal_asset.asset_id,
         },
     )
@@ -218,7 +218,7 @@ def test_bff_query_denies_a_before_scoring_and_allows_b_explicit_a_b_scope(
     b_legal = b_client.post(
         "/api/retrieval/query",
         json_body={
-            "question": "内部法务评审意见有哪些版权风险？",
+            "question": "内部资料核验说明有什么内容？",
             "asset_id": legal_asset.asset_id,
         },
     )
@@ -235,7 +235,7 @@ def test_bff_query_denies_a_before_scoring_and_allows_b_explicit_a_b_scope(
     b_acceptance = b_client.post(
         "/api/retrieval/query",
         json_body={
-            "question": "项目验收要求是什么？",
+            "question": "2024年度营业收入是多少？",
             "asset_id": acceptance_asset.asset_id,
         },
     )
@@ -248,7 +248,7 @@ def test_bff_query_denies_a_before_scoring_and_allows_b_explicit_a_b_scope(
     }
 
 
-LEGAL_PATH = "版权授权证明/内部法务评审意见.docx"
+LEGAL_PATH = "敏感资料/内部资料核验说明.docx"
 DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
@@ -312,7 +312,7 @@ def test_bff_query_never_leaks_env_llm_credentials_in_response_or_audit(
             principal_type=PrincipalType.USER,
             principal_id="user-a",
             action=Action.QUERY,
-            path_prefix="验收交付",
+            path_prefix="客户模拟资料",
         )
     )
     parser = DemoDocumentParser(DEMO_SOURCE)
@@ -344,7 +344,7 @@ def test_bff_query_never_leaks_env_llm_credentials_in_response_or_audit(
     response = client.post(
         "/api/retrieval/query",
         json_body={
-            "question": "项目验收要求是什么？",
+            "question": "2024年度营业收入是多少？",
             "asset_id": acceptance_asset.asset_id,
         },
     )

@@ -239,18 +239,18 @@ class RecordingRagPort:
         self.query_calls: list[tuple[TrustedActorContext, str, str]] = []
         self.query_result: dict[str, object] = {
             "status": "answered",
-            "answer": "验收要求一：交付文件需包含最终版本与验收清单。",
+            "answer": "2024年度营业收入为4,860万元。",
             "reason": None,
             "retrieved_count": 1,
             "llm_invoked": True,
             "citations": [
                 {
-                    "asset_version_id": "version-acceptance-v1",
+                    "asset_version_id": "version-income-v1",
                     "chunk_id": "chunk-page-1",
                     "page_number": 1,
                     "paragraph_index": None,
-                    "current_path": "验收交付/2026春季新品项目验收清单.pdf",
-                    "version_path": "验收交付/2026春季新品项目验收清单.pdf",
+                    "current_path": "客户模拟资料/收入情况说明.pdf",
+                    "version_path": "客户模拟资料/收入情况说明.pdf",
                 }
             ],
         }

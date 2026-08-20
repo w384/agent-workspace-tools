@@ -14,3 +14,14 @@ work/windows-service/secrets/
 work/e2e/
 work/demo/public-drive-ai-organizing/
 
+# 本地工程文档（仓库不发布；本地保留供工作流使用）
+AGENTS.md
+.learnings/
+docs/agent/
+docs/contracts/
+control_plane/work/sdd/
+
+# 演示临时产物与受限 ACL 目录
+.pytest-tmp*
+work/.pytest-tmp*
+

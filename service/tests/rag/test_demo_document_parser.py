@@ -8,7 +8,7 @@ DEMO_SOURCE = (
     Path(__file__).parents[3]
     / "work"
     / "demo"
-    / "public-drive-ai-organizing"
+    / "financial-preassessment"
     / "source"
 )
 
@@ -29,7 +29,7 @@ def test_demo_parser_extracts_pdf_into_page_bound_chunks():
 
     chunks = DemoDocumentParser(DEMO_SOURCE).parse(
         _request(
-            "验收交付/2026春季新品项目验收清单.pdf",
+            "客户模拟资料/收入情况说明.pdf",
             "application/pdf",
         )
     )
@@ -37,7 +37,8 @@ def test_demo_parser_extracts_pdf_into_page_bound_chunks():
     assert len(chunks) == 1
     assert chunks[0].page_number == 1
     assert chunks[0].paragraph_index is None
-    assert "验收要求一" in chunks[0].text
+    assert "4,860万元" in chunks[0].text
+    assert "营业收入" in chunks[0].text
     assert chunks[0].asset_id == "asset-demo"
     assert chunks[0].asset_version_id == "version-demo-v1"
 
@@ -47,12 +48,12 @@ def test_demo_parser_extracts_docx_into_paragraph_bound_chunks():
 
     chunks = DemoDocumentParser(DEMO_SOURCE).parse(
         _request(
-            "项目策划/2026春季新品整合传播方案.docx",
+            "敏感资料/内部资料核验说明.docx",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
     )
 
     assert [chunk.paragraph_index for chunk in chunks] == [0, 1, 2, 3]
     assert all(chunk.page_number is None for chunk in chunks)
-    assert "项目目标" in chunks[1].text
+    assert "虚构的内部核验说明" in chunks[1].text
     assert chunks[-1].ordinal == 3

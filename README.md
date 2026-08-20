@@ -1,101 +1,81 @@
-# Dify 本机安全文件工具
+# 企业资料预评估与知识库问答演示系统
 
-这是一个仅允许在指定 Windows 工作区内操作文件的 FastAPI 服务。当前默认工作区为 `D:\AI\AgentWorkspace`。
+一个面向银行对公信贷 / 小微融资场景的**演示系统**：企业上传或选择模拟资料后，系统将其版本化、结构化，完成「资料完整度与规则匹配」预评估，并提供基于本地知识库的自然语言问答。全部结果仅供演示参考，不代表真实贷款、授信、额度测算或金融产品结论。
 
-当前版本已完成本机服务核心和 HTTP API，并完成 Dify 插件 0.0.6、本地 Dify Workflow 与 Human Input 人工确认闭环；Windows 登录后自动启动使用当前用户级计划任务，详见 `docs/windows-auto-start.md`。
+## 演示能力
 
-## 已实现能力
+- **登录与权限演示**：内置两个演示账号，可演示「有权限用户正常检索」与「无权限用户越权访问被拒」两类行为。
+- **知识库问答**：两种提问来源——
+  - 上传真实材料：选择本地 PDF / DOCX 上传并自动建库（内存向量索引），随后对自建库提问；
+  - 受控样例文件：从系统内置的 import-manifest 白名单中选择虚构样例，直接提问。
+  - 问答模型可在「本地模型（Ollama）」与「联网模型（DeepSeek）」之间切换；联网模型支持在页面填写 API Key（登出即清空，不回写服务器）。
+- **资料预评估**：确定性规则引擎按演示银行规则做资料匹配度预评估，输出 match_score、结果等级（MATCH / POSSIBLE / NOT_MATCH）、已满足条件、缺失材料与版本化引用，并附固定免责声明。
+- **已建库文件管理**：列出当前账号已上传并建库的真实材料文件；上传者可在演示前手动删除，以便下次复用同名文件重新演示。受控样例文件不受影响。
+- **登出重置**：Demo 阶段每次登出即清空本账号已上传 / 已建库文件与前端选中状态，重新登录从干净状态开始。
 
-- 分页列出和搜索文件，每页最多 10 个文件。
-- 读取单个文件；15MB 以内返回 Base64 内容，超过 15MB 只返回元数据。
-- 上传单个不超过 15MB 的文件，不覆盖已有文件。
-- 预览创建文件夹、移动/重命名、移入 `.trash` 的整理计划。
-- 使用一次性确认令牌执行整批计划，任一预检失败则整批不执行。
-- 执行中失败时按逆序自动回滚。
-- 操作日志和回收文件保留 14 天。
-- 创建恢复计划，经二次确认后由 `restore_operation` 实际恢复文件。
-- 每个计划使用独立 `RLock`；并发请求使用同一令牌时只能有一个成功。
-- 除 `/health` 外，所有业务接口都要求 `X-API-Key`。
+## 快速开始（本地）
 
-## 配置
+前置：Python 3.11+（依赖 fastapi / pydantic / pypdf / python-docx / httpx）。
 
-模块级 FastAPI 应用读取两个环境变量：
+    # 1. 创建虚拟环境并安装依赖
+    python3 -m venv .venv
+    source .venv/bin/activate            # Windows: .venv\Scripts\activate
+    pip install -r service/requirements.txt
 
-| 环境变量 | 说明 | 默认值 |
+    # 2. 种子化演示数据并启动服务（幂等，可重复执行）
+    python scripts/init_demo_financial_preassessment.py --host 127.0.0.1 --port 8891
+
+    # 3. 浏览器打开演示页
+    #    http://127.0.0.1:8891/demo/
+
+只种子化数据不启动服务（打印资产 / 规则 ID 清单）：
+
+    python scripts/init_demo_financial_preassessment.py --seed-only
+
+## 云端部署（腾讯云国际站）
+
+部署形态与完整步骤见 [docs/deployment/cloud-deploy-2026-08-20.md](docs/deployment/cloud-deploy-2026-08-20.md)，要点：
+
+- 轻量应用服务器 / CVM，建议 2C4G 起步，Ubuntu 22.04 / Debian 12，Python 3.11+。
+- **不装 GPU、不装 Ollama**；真实可用模型只有 DeepSeek API，本地模型按钮在云端会提示未配置。
+- 启动时显式传 --host 0.0.0.0 才能从公网访问：
+
+    python scripts/init_demo_financial_preassessment.py --host 0.0.0.0 --port 8891
+
+- DeepSeek Key 用环境变量注入（RAG_LLM_API_KEY / RAG_LLM_MODEL / RAG_LLM_BASE_URL），不写入代码与仓库；前端填写的 Key 登出即清空。
+
+## 演示账号
+
+| 账号 | 密码 | 权限 |
 | --- | --- | --- |
-| `DIFY_AGENT_WORKSPACE_ROOT` | 允许访问的唯一工作区 | `D:\AI\AgentWorkspace` |
-| `DIFY_AGENT_WORKSPACE_API_KEY` | 业务接口 API Key | 无；未设置时业务接口返回 503 |
+| alice | demo-a-password | 已授权：可检索「客户模拟资料」受控样例与本人上传材料 |
+| bob | demo-b-password | 无 QUERY 授权：查询受控样例 / 他人材料返回 DENIED（越权演示） |
 
-客户端必须在业务请求中加入：
+## 项目结构
 
-```text
-X-API-Key: <DIFY_AGENT_WORKSPACE_API_KEY>
-```
+    control_plane/          演示后端（BFF）：登录会话、权限评估、知识库上传/问答、资料预评估、模型切换
+      static/               前端三页（资料预评估 / 知识库问答 / 已建库文件管理）
+      app/                  FastAPI 应用、权限策略、RAG 桥接、LLM 提供方注册
+      tests/                演示端到端测试（含越权负向控制断言）
+    service/app/rag/        RAG 检索服务：文档解析、向量索引、权限感知检索、LLM 生成
+    service/tests/rag/      RAG 单元测试
+    scripts/                初始化脚本（幂等 seed + 起服务）、演示素材构建脚本
+    work/demo/financial-preassessment/
+      样例素材（PDF/DOCX，全部虚构）、规则 JSON、import-manifest 白名单
+    docs/demo/              演示设计、runbook、演示指南
+    docs/deployment/        云端部署清单
+    docs/verification/      验证证据与检查清单
 
-API Key 不写入项目文件，也不提供不安全的默认值。
+## 测试验证
 
-## HTTP 接口
+    # 演示后端全量（含权限负向、前端交互、模型切换、知识库桥接）
+    python -m pytest control_plane/tests -q
 
-| 方法 | 路径 | 用途 |
-| --- | --- | --- |
-| `GET` | `/health` | 公开健康检查 |
-| `GET` | `/files` | 分页列出文件 |
-| `GET` | `/files/search` | 按名称搜索文件 |
-| `GET` | `/files/content` | 获取文件元数据和可用的 Base64 内容 |
-| `POST` | `/files/upload` | multipart 上传文件 |
-| `POST` | `/plans` | 校验并创建待确认整理计划 |
-| `POST` | `/plans/{plan_id}/approval-token` | 为待确认计划签发一次性令牌 |
-| `POST` | `/plans/{plan_id}/execute` | 消费令牌并执行整理计划 |
-| `GET` | `/operations/{operation_id}` | 查询操作日志与恢复期限 |
-| `POST` | `/operations/{operation_id}/restore-plans` | 创建待确认恢复计划 |
-| `POST` | `/plans/{plan_id}/restore` | 消费令牌并实际恢复操作 |
-| `POST` | `/maintenance/cleanup-expired-operations` | 清理过期日志及对应回收目录 |
+    # RAG 检索服务（LLM 生成 / 解释端口 / 文档解析 / 权限感知检索等）
+    python -m pytest service/tests/rag -q
 
-## 确认与执行顺序
+核心验收口径：RAG LLM 20 passed、控制面 ≥101 passed、service ≥146 passed、git diff --check 通过。
 
-整理文件：
+## 免责声明
 
-1. 调用 `POST /plans` 创建计划并展示确认摘要。
-2. 用户确认后，调用 `POST /plans/{plan_id}/approval-token` 获取一次性令牌。
-3. 将创建计划响应中的 `plan_hash` 与一次性令牌共同提交给 `POST /plans/{plan_id}/execute`；不得在确认后重新查询或重算该值。
-
-恢复操作：
-
-1. 调用 `POST /operations/{operation_id}/restore-plans` 创建恢复计划。
-2. 用户确认后，为恢复计划签发一次性令牌。
-3. 将恢复计划响应中的 `plan_hash` 与令牌共同提交给 `POST /plans/{restore_plan_id}/restore`。
-
-明文令牌只在签发响应中出现一次；磁盘计划文件只保存令牌的 SHA-256 哈希，消费后会被移除。计划本身另有 `plan_hash`；调用方必须独立保存确认时的值，执行器会在消费令牌和写文件前比较该值与当前计划重算结果。当前兼容执行器还会为所有源文件保存流式 SHA-256 快照、将快照绑定到 `plan_hash`，并在消费令牌前重算；确认后同路径内容发生变化时拒绝执行且保留令牌。
-
-## 验证
-
-在项目根目录、虚拟环境可用时运行：
-
-```powershell
-& ".\service\.venv\Scripts\python.exe" -m pytest ".\service\tests" -v
-```
-
-测试全部使用 pytest 临时目录，不会访问真实工作区 `D:\AI\AgentWorkspace`。
-
-## 当前实现状态
-
-### 已实现并验证
-
-- Dify 插件：已完成 `本机安全工作区` 插件 0.0.6 的打包、安装和运行验证。
-- Dify Workflow：已在本机 Dify 创建并发布最小闭环。
-- Human Input：已配置 Webapp 人工确认；“确认执行”会执行计划，“取消”不会修改文件。
-- 自然语言闭环：`request → list_files → LLM → create_plan → Human Input → execute_confirmed_plan`。
-- LLM：已配置为输出候选 `operations_json`；当前使用 `qwen3.5:9b`，关闭思考模式并限制输出为纯 JSON 数组。
-- 已验证确认、取消和一次性确认表单行为。
-- 当前源码新增的独立 `plan_hash` 执行契约尚未打包、安装或在 Dify 页面重新绑定；已安装 0.0.6 与旧 Workflow 仅作为历史运行证据。
-
-### 尚未实施
-
-- Windows Service 形式的系统级常驻配置；当前已采用用户登录触发的计划任务自动启动。
-
-## 项目资料
-
-- `AGENTS.md`：项目协作规则。
-- `docs/implementation-plan.md`：分阶段实施计划。
-- `docs/agent/`：Agent 工作流和决策规则。
-- `.learnings/`：已确认经验与错误记录。
+本系统的规则、样例资料、评分与示例银行名称均为虚构演示内容，仅表示资料与示例规则的匹配程度。**不参与、不代表贷款申请、授信审批、额度测算或金融产品销售**，也不构成任何真实金融机构的要求。
