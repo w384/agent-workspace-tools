@@ -102,6 +102,17 @@ git diff --check
 - checklist-step2-failure-injection.log：规则指纹错配、资产指纹错配、未声明源、DENY 零召回、越权/错配 material 与 rule 引用共 7 项全部 fail closed，7 passed in 0.24s。
 - checklist-step3-reset-regression.log：重置后完整专项复跑 20 passed in 0.40s，证明内存仓储与测试夹具可从干净状态自动重建并全绿。
 
+## 实际结果（2026-08-20 实测 · v3 登出清空修复后最终证据）
+
+背景：Q 实测反馈「登出后换 bob 登录会直接看到 alice 刚生成的评估报告」。根因定位为纯前端 DOM 残留（后端每次 assess/query 实时返回，不跨用户存储报告）：logout() 只隐藏面板、未清空结果区，bob 登录后 #assessment-result/#qa-result 内上一用户的报告/问答仍在 DOM 中。修复为登出时清空两个结果区，并新增静态回归断言锁住此行为。
+
+- 修复：control_plane/static/app.js logout() 增加清空 #assessment-result 与 #qa-result（replaceChildren）；test_demo_frontend_v2.py 新增 test_demo_frontend_logout_clears_previous_report（断言 logout 清空两个结果区）。
+- 前端测试（test_demo_frontend.py + test_demo_frontend_v2.py）：21 passed in 0.33s（原 20 + 新增 1）。
+- 控制面全量：123 passed in 2.93s（沙盒内 3 个 tmp_path PermissionError 为系统 Temp 权限限制，提权下 3 passed in 0.40s，合计 126 passed，与改动无关）。
+- node --check：exit 0；git diff --check：exit 0。
+- 提交（main，未推送 origin）：046ead6 fix(control_plane): 登出时清空评估/问答结果区，避免切换身份看到上一用户残留报告。
+- 红线：未 push origin；工作区仅剩 work/.tmp-demo-serve.log* 临时残留。
+
 ## 关键断言
 
 路径 B（LLM 知识库问答）：
@@ -160,5 +171,6 @@ git diff --check
 
 ## 未提交状态
 
-- 全部变更未提交、未推送、未发布。
-- git status 含大量既有未提交变更（service、plugin、docs、control_plane、work 等），本轮仅新增上述文档；未触碰 Dify、公共盘或 ACL。
+- 本文件最新证据对应的代码/文档改动已提交至 main（提交链见上方各「实际结果」段），**未推送 origin**（等待独立审计最终复核或 Q 授权）。
+- 工作区仅剩 work/.tmp-demo-serve.log* 临时运行残留（随批次清理，非代码）；既有沙盒权限受限目录（.pytest-tmp*、work/.pytest-tmp*）为环境残留，非本轮改动。
+- 红线：未 push origin、未建分支、main 直链保持、未触碰 Dify / 公共盘 / ACL。

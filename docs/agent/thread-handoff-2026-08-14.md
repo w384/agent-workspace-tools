@@ -35,13 +35,17 @@
   - control_plane 全量 101 passed（提权跑；93 基线 + 前端 v2 4 项 = 101，含全部安全断言）。
   - service 全量 146 passed（改名遗留已修）。
   - `git diff --check` exit 0。
-- 版本状态：main 分支 HEAD = 1477b50，本地 4 个新提交未推送（9480e33 docs → 11b9066 feat(rag) bank_label → 80e4e0c feat(control_plane) E2/E4/E5 → d9007f6 feat(control_plane) E3 → 1477b50 docs(runbook)）；未推送、未发布；origin 推送待 Q 授权。
+- 版本状态：main 分支 HEAD = 046ead6（2026-08-20 更新），自 1477b50 后新增：1477b50/72d2ff7 docs(runbook) E5 说明 → 43802ba docs(agent) 3.1 回填 → e1b582b/5ab612d/b5b9553 docs(verification) checklist 证据 → d9007f6 E3 脚本 → 4d0c241 E6 路径 B 真实 LLM 桥接 + bob 越权 → c0b9c7f BFF 模型本地/联网切换 → 3783b46 LLMClient 空 key 不发头 → 74198fd 问答按状态渲染 → 842ef1d/7969d60 E5「选中即自动发起」BFF+前端 → 9f79b4c/4a12209 前端交互与版式优化 → 292a21d 多候选银行 → dee615c 静态资源禁缓存 → 046ead6 登出清空结果区；未推送、未发布；origin 推送待 Q 授权。
 - 已知归属（跟踪项）：前端切片已由控制面 v2 完成并合入（BFF 桥接 + /demo 双 tab + 凭证不泄前端）；RAG 侧 5 个演示文件（demo-bank-rules-v1.json、import-manifest.json、financial-preassessment-bank-rule-matching-demo.md、finance-demo-rag-bridge.md/checkpoint）待 RAG 线程确认后提交，总集成本次不碰；主 checkout 改名遗留脏改（control_plane/work/sdd、docs、scripts、service/app/main.py、test_health.py 等）按归属拆分提交。
 - 边界：DENY 必须在召回/评分/LLM/引用前；缺材料返回 POSSIBLE 或 MISSING_INFO，不推断 NOT_MATCH；match_score 只称资料匹配度；LLM 只做问答草稿/解释润色，不做授权裁决/最终评分/贷款授信额度产品推荐；凭证不落前端静态资源、BFF 响应、审计与仓库；不 push origin（等独立审计最终复核）。
 - 归档原因（2026-08-18）：累计 input 2309 万 tokens ≥ 1000 万（ARCHIVE 命中），按 thread-archive-restart 技能触发归档重开。
-- 剩余待办（2026-08-18 v3 更新）：
-  1. E5「选中即自动发起」BFF 受控样例→资产 ID 映射只读端点：P1 延后，未开始（需 PO+PMO 确认是否纳入本期）。
-  2. 前端 /demo 人工演示：待 Q 排期。
+- 剩余待办（2026-08-20 v3 更新）：
+  1. E5「选中即自动发起」BFF 受控样例→资产 ID 映射只读端点：✅ 已完成（842ef1d BFF POST /api/controlled-sample/assess+query / 7969d60 前端选中即自动发起、资产 ID 对演示隐藏）。
+  2. 多候选银行展示：✅ 已完成（292a21d，评估同时展示 A/B/C/D/E 五条候选匹配）。
+  3. 模型本地/联网切换：✅ 已完成（c0b9c7f + llm_providers.py，本地默认 Ollama qwen3.5:9b / 联网 DeepSeek；联网工具维修中，Q 暂不启用）。
+  4. 登出清空结果区：✅ 已完成（046ead6，避免切换身份看到上一用户残留报告）。
+  5. 前端 /demo 人工演示：待 Q 排期（视觉 QA 并入此项）。
+  - 尚未开始 / 挂起：origin 推送（待 Q 授权或独立审计最终复核）；Dify 实机接入（P1-2）、真实上传（P1-1）、LLM 生产化降级/多租户（P1-3）均为 Backlog 项。
   - 历史已完成（v2 期间）：集成证据回填 checklist（5507416）、test_windows_auto_start.py 改名遗留（146 passed）、真实 LLM smoke test、待提交项拆分（A=22f61d8/B=3d9dcf8+8324902/C=7f0f153/D=5507416）、work/demo/public-drive-ai-organizing 忽略裁定。
 - 在途项（2026-08-18 控制面 v2 派单 07 回报，79e8 工作树未提交；总集成已只读核验并裁决）：
   - ✅ v3 已回填（2026-08-18）：RAG 4c0b bank_label 已合入 main（11b9066）；控制面 E2/E4/E5 已合入 main（80e4e0c）；E3 初始化脚本已合入（d9007f6）；集成回归 control_plane 101 / RAG LLM 20 / service 146 全绿；runbook 步骤 4 补 E5 操作说明（1477b50）。
@@ -54,10 +58,11 @@
     2. E5「选中即自动发起」：批准为 P1 后续（BFF 新增受控样例→资产 ID 映射只读端点，选中后自动发起评估），执行延后至 v3 线程；当前「手动填资产 ID」流程由 v3 在 runbook 补充演示期操作说明。
     3. shu26.cfd 参考站自动截图不可行（浏览器 RPC 受信路径校验失败）→ 接受按派单描述实现，逐像素对照不列为验收项；视觉 QA 并入前端 /demo 人工演示（待 Q 排期）。
   - v3 接续：RAG 4c0b 提交 bank_label → 合入 main → 控制面 E2/E4/E5 提交合入 → 集成回归 → BFF 受控样例端点（P1）。
+  - ✅ v3 已完成（2026-08-20 追加）：E6 路径 B 真实 LLM 桥接（4d0c241，FinanceDemoLlmRagPort，alice 授权 ANSWERED / bob 无 QUERY 越权 DENIED 零 LLM 调用，3 测试 passed）；BFF 模型本地/联网切换（c0b9c7f + llm_providers.py，Ollama qwen3.5:9b 默认 / DeepSeek，密钥仅环境注入不外泄）；E5「选中即自动发起」BFF+前端（842ef1d/7969d60，资产 ID 对演示隐藏）；问答按状态渲染（74198fd）；多候选银行（292a21d，A/B/C/D/E 五条候选）；前端交互/版式统一（9f79b4c/4a12209，点按钮发起、登录居中 640px、去 DEMO 标题、顶栏头像+登出）；静态资源禁缓存（dee615c，修浏览器缓存遮蔽前端更新）；登出清空结果区（046ead6，修切换身份看到上一用户残留报告）。回归证据逐段回填 checklist（e1b582b/5ab612d/b5b9553 + 本批 2026-08-20 段）。
 - 主 checkout 归档共享改动 ✅（v3 已提交）：9480e33（.learnings/LEARNINGS.md、.learnings/ERRORS.md、AGENTS.md、thread-archive-sop.md、thread-handoff）；app.js options.body 修复已并入 80e4e0c 前端完整版（3e0735b/d4e7 保留）。
   - .learnings/LEARNINGS.md（+88）、.learnings/ERRORS.md（+45，含 ERR-20260818-001 线程工具运行时实测）、AGENTS.md（补「工具核查铁律」小节）、docs/agent/thread-archive-sop.md（handoff_thread 实测注记）。
   - control_plane/static/app.js：1 行修复（jsonRequest headers 判据 options.json→options.body），79e8 E2 批次未含此修复，归属待定，v3 核验后并入。
-- 下一步：v3 剩余待办 = E5「选中即自动发起」端点（P1，待 PO+PMO 定稿）+ 前端 /demo 人工演示（待 Q 排期）；本轮 runbook/合入/回归已闭环。
+- 下一步（2026-08-20 更新）：v3 已闭环项 = E5「选中即自动发起」、多候选银行、模型本地/联网切换、登出清空；剩余待办 = 前端 /demo 人工演示（待 Q 排期，视觉 QA 并入）+ origin 推送（待 Q 授权 / 独立审计最终复核）；Backlog 挂起项（P1-1 真实上传 / P1-2 Dify 实机 / P1-3 LLM 生产化）不阻塞本期演示。
 
 - 执行线程（executor，01a00833-d1f3-7130-bc01-31876dc2d7de，worktree D:\AI\Codex\Worktree\ceb0\agent-workspace-tools）：总集成 2026-08-16 拆出的 B 类机械执行子线程，只做执行不做裁决。职责：跑测试、按给定范围/语义拆分/提交信息做 git add/commit（不自行定范围、不 push）、按给定口径合并代码、采集归档集成证据、按给定口径与模板起草 runbook/checklist、执行三步自检并落日志、演示样例机械构建、文档机械同步、只读证据核验。红线：不裁决集成顺序/Gate/范围/契约，不碰控制面/RAG 模块所有权，不做跨线程决策，不 push origin；归属冲突、根因不明、清单外需求一律回总集成裁决。
 
