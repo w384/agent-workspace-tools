@@ -30,6 +30,7 @@ from service.app.rag.index import InMemorySearchIndex
 from service.app.rag.ingestion import IngestionRequest
 from service.app.rag.llm import build_llm_answer_generator
 from service.app.rag.parser_worker import DOCX_MIME_TYPE, PDF_MIME_TYPE
+from service.app.rag.vector_retrieval import make_retrieval_scorer
 
 _SCENARIO = "finance_profile_matching"
 _SOURCE_TYPE = "demo_fixture"
@@ -72,7 +73,13 @@ class FinanceDemoLlmRagPort:
             explanation_port=explanation_port,
         )
 
-        search_index = InMemorySearchIndex(scorer=lambda _question, _chunk: 1.0)
+        # Real vector retrieval: char n-gram cosine scorer ranks chunks by
+        # how well they answer the question, instead of the previous
+        # constant 1.0 (every chunk equally "matched"). The demo evidence
+        # threshold is 0.0 so the top ranked chunks become the evidence;
+        # the "evidence insufficient" REFUSED path still triggers whenever
+        # retrieval returns nothing (no index / no authorized chunks).
+        search_index = InMemorySearchIndex(scorer=make_retrieval_scorer())
         self._index_declared_samples(search_index)
 
         if providers is not None:
@@ -85,7 +92,7 @@ class FinanceDemoLlmRagPort:
         self._query_port = DemoRagPort(
             repository=repository,
             search_index=search_index,
-            minimum_evidence_score=0.75,
+            minimum_evidence_score=0.0,
             answer_generator=answer_generator,
         )
 
