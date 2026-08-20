@@ -113,6 +113,17 @@ git diff --check
 - 提交（main，未推送 origin）：046ead6 fix(control_plane): 登出时清空评估/问答结果区，避免切换身份看到上一用户残留报告。
 - 红线：未 push origin；工作区仅剩 work/.tmp-demo-serve.log* 临时残留。
 
+## 实际结果（2026-08-20 实测 · v3 DeepSeek key 前端填写 + 样例伪造 + 向量库回归证据）
+
+背景：Q 三项指示——①前端选 DeepSeek 问答时提供 API key 填写入口，填入后正常发起云端问答；②样例文件按真实情况伪造（虚构企业、跨文档数字体系一致，不能露馅）；③知识库做简单真实向量检索（字符 n-gram 余弦排序替代恒等打分，已在 a33a5a8 完成）。本轮落地①的代码与②的样例重建。
+
+- DeepSeek key 运行时填写：BFF 扩展 POST /api/llm/provider 支持 api_key 运行时注入（仅内存、不落盘、不入审计），GET /api/llm/provider 返回 cloud_key_configured（只回 bool 不回 key）；前端模型切换区新增 key 填写面板（密码输入），选择云端模型且未配 key 时弹出填写，确认后正常切换并问答。
+- 安全断言细化：前端有意引用 api_key 字段名（作为 BFF 请求字段名）；真实 key 仅由用户运行时输入、存 BFF 内存，不落盘、不入审计，key 值/base_url/model 不出现于前端静态资源、BFF 响应与审计。新增 test_llm_provider_switch.py 覆盖「运行时注入不泄露」与「默认本地 + cloud_key_configured」。
+- 样例伪造：build_financial_preassessment_demo_assets.py 重建为虚构企业「深圳市海川智能装备制造有限公司」（统一社会信用代码 91440300MA5F2K9X4Q、成立 2019-03、注册资本 2000 万实缴 1500 万、法人林海峰、员工 86 人），跨文档数字体系一致（2022/2023/2024 收入 2860/4118/4860 万、2024 开票 4580 万/申报 4720 万、资金流入 5120 万/流出 4440 万、总资产 7200 万/总负债 3400 万/净资产 3800 万、资产负债率 47.2%、前五大客户占比 62% 等）；新增 _pin_pdf_datetime 与 docx 固定时间戳保证确定性重建；D/E 规则模板恢复 5 家后重建，demo-bank-rules-v1.json 指纹与 HEAD 完全一致（无 rules diff）。
+- 回归证据（提权运行，新鲜输出）：control_plane/tests 全量 128 passed（沙盒内 3 个 tmp_path 权限 error 在沙盒外全部通过）；service/tests 全量 156 passed；RAG LLM（test_llm_answer_generator + test_llm_explanation_port）20 passed；定向回归（rag_bridge + llm_rag_bridge + llm_provider_switch）19 passed；前端（test_demo_frontend + v2）22 passed；node --check exit 0；git diff --check 仅 reportlab PDF 元数据行尾空格警告（与 HEAD 已提交 PDF 同款，非本轮引入）。
+- 提交链（main，未推送 origin）：a33a5a8（此前向量检索）→ 0b40a58 feat(control_plane) 前端 DeepSeek API key 运行时填写（7 files +217/-20）→ 2311048 feat(rag) 样例伪造资产确定性构建（9 files +164/-47）。
+- 红线：未 push origin、未建分支、main 直链保持。
+
 ## 关键断言
 
 路径 B（LLM 知识库问答）：
@@ -121,7 +132,7 @@ git diff --check
 - DENY/REFUSED 时 llm_invoked=false 且 LLM 零调用；DENY 发生在召回、评分、重排、LLM 上下文与引用之前。
 - citations 绑定授权证据（asset_id/asset_version_id/chunk_id/page/paragraph）；LLM 不新增、不越出授权范围引用。
 - LLM 不裁决：只做问答草稿/解释润色，不产出授权结论、最终评分权威、贷款/授信/额度/产品推荐。
-- LLM 凭证（api_key/base_url/model）不出现于前端静态资源、BFF 响应与审计。
+- LLM 凭证值（api_key 真实值/base_url/model）不出现于前端静态资源、BFF 响应与审计；前端仅引用 api_key 字段名（BFF 请求字段名），真实 key 由用户运行时在页面输入、仅存 BFF 内存、不落盘、不入审计。
 - LLM 失败/超时须有明确降级（fail-closed 或回退确定性摘录），并在响应如实标记，不得伪装为真实 LLM 成功。
 
 正向：
