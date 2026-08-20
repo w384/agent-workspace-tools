@@ -44,6 +44,7 @@
         <div class="tabs" role="tablist">
           <button class="tab active" data-tab="assessment">资料预评估</button>
           <button class="tab" data-tab="qa">知识库问答</button>
+          <button class="tab" data-tab="knowledge">已建库文件</button>
         </div>
 
         <div id="assessment" class="tab-panel">
@@ -129,14 +130,16 @@
           </div>
 <button type="submit">提问</button>
           </form>
+          <pre id="qa-result" class="output"></pre>
+        </div>
+
+        <div id="knowledge" class="tab-panel hidden">
+          <h2>已建库文件管理</h2>
+          <p>已上传并建库的真实材料文件列表；删除后可重新上传同名文件，便于下次演示。受控样例文件不受影响。</p>
           <div class="file-picker knowledge-manage" id="knowledge-manage">
-            <h3>已建库文件管理</h3>
-            <p class="muted">
-              已上传并建库的真实材料文件列表；删除后可重新上传同名文件，便于下次演示。受控样例文件不受影响。
-            </p>
+            <h3>已建库文件列表</h3>
             <div id="knowledge-file-list" class="uploaded-list"></div>
           </div>
-          <pre id="qa-result" class="output"></pre>
         </div>
       </section>
     </main>

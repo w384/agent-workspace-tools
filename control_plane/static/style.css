@@ -37,6 +37,8 @@ body {
 .report-area,
 .report-card,
 .output,
+#qa-hint,
+.model-switch,
 #login-panel {
   max-width: 640px;
   margin-left: auto;

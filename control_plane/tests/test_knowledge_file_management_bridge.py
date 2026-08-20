@@ -206,3 +206,55 @@ def test_delete_rejects_unsafe_file_name(
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "invalid_file_name"
 
+
+def test_logout_clears_own_uploaded_materials_for_clean_relogin(
+    repository, demo_identities, monkeypatch
+) -> None:
+    """Demo phase: logout drops the session user's uploaded real-material
+    files, so the next re-login starts clean and the same file name can be
+    uploaded again (future real use can disable this via
+    clear_uploads_on_logout=False)."""
+    client = _build_client(repository, monkeypatch, demo_identities)
+    _login(client, "alice", "demo-a-password")
+
+    content = _make_docx_bytes("海川智能主营智能装备制造。")
+    _upload(client, content, "海川智能-资料.docx").json()
+    assert [item["name"] for item in _list_files(client).json()["files"]] == [
+        "海川智能-资料.docx"
+    ]
+
+    client.post("/api/session/logout")
+
+    # Re-login: the knowledge list is empty again (fresh demo state).
+    _login(client, "alice", "demo-a-password")
+    assert _list_files(client).json()["files"] == []
+    # The same file name can be uploaded again (no 409 stale duplicate).
+    reuploaded = _upload(client, content, "海川智能-资料.docx")
+    assert reuploaded.status_code == 200
+    assert reuploaded.json()["index_state"] == "ready"
+
+
+def test_logout_only_clears_the_logging_out_users_uploads(
+    repository, demo_identities, monkeypatch
+) -> None:
+    """Logout must not touch files uploaded by other accounts: bob's logout
+    clears bob's material only and leaves alice's file intact for alice."""
+    client = _build_client(repository, monkeypatch, demo_identities)
+    _login(client, "alice", "demo-a-password")
+    _upload(client, _make_docx_bytes("海川智能主营智能装备制造。"), "海川智能-资料.docx").json()
+
+    _login(client, "bob", "demo-b-password")
+    _upload(client, _make_docx_bytes("浩宇贸易主营大宗商品贸易。"), "浩宇贸易-资料.docx").json()
+
+    # bob logs out -> only bob's own upload is cleared.
+    client.post("/api/session/logout")
+    _login(client, "bob", "demo-b-password")
+    assert [item["name"] for item in _list_files(client).json()["files"]] == [
+        "海川智能-资料.docx"
+    ]
+
+    # alice's file is still there and remains deletable by alice.
+    _login(client, "alice", "demo-a-password")
+    listed = _list_files(client).json()["files"]
+    assert [item["name"] for item in listed] == ["海川智能-资料.docx"]
+    assert listed[0]["can_delete"] is True

@@ -156,6 +156,7 @@ def create_app(
     llm_providers: object | None = None,
     disclaimer_version: str = "disclaimer-demo-v1",
     disclaimer_text: str = "仅供资料完整度与规则匹配演示参考",
+    clear_uploads_on_logout: bool = True,
 ) -> FastAPI:
     if not internal_service_key.strip():
         raise ValueError("internal service key must be non-empty")
@@ -195,6 +196,7 @@ def create_app(
     app.state.llm_providers = llm_providers
     app.state.disclaimer_version = disclaimer_version
     app.state.session_store = session_store
+    app.state.clear_uploads_on_logout = clear_uploads_on_logout
     service = ControlPlaneService(
         repository,
         file_executor,
@@ -268,6 +270,9 @@ def create_app(
 
     @app.post("/api/session/logout", status_code=204)
     def logout(cp_session: str | None = Cookie(default=None)) -> Response:
+        actor = session_store.resolve(cp_session, _new_id())
+        if actor is not None and app.state.clear_uploads_on_logout:
+            _clear_uploaded_assets_on_logout(app, actor)
         session_store.revoke(cp_session)
         rag = getattr(app.state, "rag_port", None)
         if rag is not None and hasattr(rag, "clear_cloud_key"):
@@ -1029,6 +1034,38 @@ def _knowledge_mime_label(extension: str) -> str:
     if extension == ".docx":
         return DOCX_MIME_TYPE
     raise ApiError(422, "unsupported_file_type", "Only PDF/DOCX uploads are supported")
+
+
+def _clear_uploaded_assets_on_logout(
+    app: FastAPI, actor: TrustedActorContext
+) -> None:
+    """Demo phase: drop the logging-out user's uploaded real-material files.
+
+    Every re-login then starts from a clean slate (the next demo can re-upload
+    the same file names instead of hitting the stale 409 duplicate). Only the
+    session user's own 客户上传资料/* assets are removed; controlled samples
+    and other accounts' files are never touched. Real deployments that want to
+    keep uploaded materials can disable this via clear_uploads_on_logout=False.
+    """
+    repository = app.state.repository
+    rag = app.state.rag_port
+    prefix = f"{UPLOADED_DIR}/"
+    for asset in repository.list_assets(actor.workspace_id):
+        if not asset.path.startswith(prefix):
+            continue
+        if asset.created_by != actor.actor_id:
+            continue
+        if rag is not None and hasattr(rag, "delete_uploaded_version"):
+            rag.delete_uploaded_version(
+                actor=actor, asset=asset, request_id=actor.request_id
+            )
+        repository.remove_asset(asset.asset_id)
+        _append_knowledge_audit(
+            repository,
+            actor,
+            "uploaded_file_cleared_on_logout",
+            {"file_name": asset.name, "path": asset.path},
+        )
 
 
 def _append_knowledge_audit(

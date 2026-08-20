@@ -817,14 +817,7 @@
 
   function switchTab(event) {
     const target = event.currentTarget.dataset.tab;
-
-  const modelButtons = document.querySelectorAll(".model-btn");
-  modelButtons.forEach((button) => {
-    button.addEventListener("click", switchProvider);
-  });
-  loadProviderStatus();
-
-  activateTab(target);
+    activateTab(target);
   }
 
   const logoutBtn = $("#logout-btn");
@@ -865,5 +858,8 @@
   if (qaUploadBtn) qaUploadBtn.addEventListener("click", uploadRealMaterial);
   document.querySelectorAll(".tab").forEach((button) => {
     button.addEventListener("click", switchTab);
+  });
+  document.querySelectorAll(".model-btn").forEach((button) => {
+    button.addEventListener("click", switchProvider);
   });
 })();
