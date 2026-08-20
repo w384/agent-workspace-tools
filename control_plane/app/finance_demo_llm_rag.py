@@ -161,6 +161,32 @@ class FinanceDemoLlmRagPort:
         self._repository.activate_asset_version(asset_version.asset_version_id)
         return len(chunks)
 
+    def delete_uploaded_version(
+        self,
+        actor: TrustedActorContext,
+        asset,
+        request_id: str,
+    ) -> int:
+        """Drop one uploaded asset from the search replica and revoke its QUERY grant.
+
+        Called only after the BFF has verified the caller owns the asset (so
+        the next demo can re-upload the same file name). The asset record
+        itself is removed by the BFF via repository.remove_asset afterwards.
+        """
+        removed = 0
+        if asset.active_version_id is not None:
+            removed = self._search_index.delete_version(
+                tenant_id=self._workspace_id,
+                active_version=ActiveAssetVersion(
+                    asset.asset_id,
+                    asset.active_version_id,
+                ),
+            )
+        self._repository.revoke_permission_grants(
+            self._workspace_id, asset.path
+        )
+        return removed
+
     def set_provider(self, provider_id: str, api_key: str | None = None) -> None:
         """Switch the path-B answer provider at runtime."""
         if self._providers is None:

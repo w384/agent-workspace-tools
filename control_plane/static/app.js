@@ -268,6 +268,9 @@
       $("#demo-panel").classList.remove("hidden");
       const username = String(form.get("username") || "");
       renderUserChip(username);
+      // 重新登录后强制同步一次模型状态，避免上次会话的云端 Key 残留
+      loadProviderStatus();
+      loadKnowledgeFiles();
     } catch (error) {
       setStatus("登录失败：" + error.message);
     }
@@ -331,6 +334,7 @@
     if (qr) qr.replaceChildren();
     resetControlledFilePickers();
     resetUploadedMaterials();
+    resetKnowledgeFiles();
     resetModelUi();
     activateTab("assessment");
     const status = $("#login-status");
@@ -372,6 +376,94 @@
       status.className = "file-status";
       status.textContent = "未上传文件。";
     }
+  }
+
+  // 已建库文件管理：加载当前 workspace 已上传并建库的真实材料文件
+  async function loadKnowledgeFiles() {
+    try {
+      const payload = await jsonRequest("/api/demo/knowledge/files", {
+        method: "GET",
+      });
+      renderKnowledgeFiles(payload.files || []);
+    } catch (error) {
+      const list = $("#knowledge-file-list");
+      if (list) {
+        list.replaceChildren(
+          el(
+            "p",
+            "file-status file-status-error",
+            "加载已建库文件失败：" + error.message
+          )
+        );
+      }
+    }
+  }
+
+  function renderKnowledgeFiles(files) {
+    const list = $("#knowledge-file-list");
+    if (!list) return;
+    list.replaceChildren();
+    if (!files || files.length === 0) {
+      list.appendChild(el("p", "file-status", "尚未上传任何真实材料文件。"));
+      return;
+    }
+    const ul = el("ul", "knowledge-file-items");
+    files.forEach((file) => {
+      const li = el("li", "knowledge-file-item");
+      const nameSpan = el("span", "knowledge-file-name", file.name);
+      li.appendChild(nameSpan);
+      if (file.can_delete) {
+        const delBtn = el("button", "knowledge-file-del", "删除");
+        delBtn.type = "button";
+        delBtn.addEventListener("click", () => deleteKnowledgeFile(file.name));
+        li.appendChild(delBtn);
+      }
+      ul.appendChild(li);
+    });
+    list.appendChild(ul);
+  }
+
+  async function deleteKnowledgeFile(name) {
+    const list = $("#knowledge-file-list");
+    if (!window.confirm("确认删除已建库文件「" + name + "」？删除后可重新上传。")) {
+      return;
+    }
+    try {
+      await jsonRequest("/api/demo/knowledge/files/delete", {
+        body: { file_name: name },
+      });
+      // 若删除的正是当前选中的上传文件，清空选择
+      if (
+        qaSelectedFile &&
+        qaSelectedFile.kind === "uploaded" &&
+        qaSelectedFile.name === name
+      ) {
+        qaSelectedFile = null;
+        updateQaCurrentTarget();
+        const hiddenField = $('[name="file_name"]');
+        if (hiddenField) hiddenField.value = "";
+        const status = $("#qa-upload-status");
+        if (status) {
+          status.className = "file-status";
+          status.textContent = "未上传文件。";
+        }
+      }
+      qaUploadedFiles = qaUploadedFiles.filter((item) => item !== name);
+      qaOwnUploaded = qaOwnUploaded.filter((item) => item !== name);
+      renderUploadedFiles();
+      await loadKnowledgeFiles();
+    } catch (error) {
+      if (list) {
+        list.prepend(
+          el("p", "file-status file-status-error", "删除失败：" + error.message)
+        );
+      }
+    }
+  }
+
+  function resetKnowledgeFiles() {
+    const list = $("#knowledge-file-list");
+    if (list) list.replaceChildren();
   }
 
   function renderUploadedFiles() {

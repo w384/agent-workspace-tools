@@ -34,7 +34,11 @@ class ControlPlaneRepository(Protocol):
 
     def move_asset_path(self, asset_id: str, path: str) -> Asset: ...
 
+    def remove_asset(self, asset_id: str) -> Asset | None: ...
+
     def find_asset_by_path(self, workspace_id: str, path: str) -> Asset | None: ...
+
+    def revoke_permission_grants(self, workspace_id: str, path_prefix: str) -> int: ...
 
     def get_asset_version(self, asset_version_id: str) -> AssetVersion: ...
 
@@ -126,6 +130,18 @@ class InMemoryControlPlaneRepository:
             )
         ]
 
+    def revoke_permission_grants(self, workspace_id: str, path_prefix: str) -> int:
+        """Drop every grant whose path matches the exact revoked path."""
+        revoked_ids = [
+            grant_id
+            for grant_id, grant in self.permission_grants.items()
+            if grant.workspace_id == workspace_id
+            and grant.path_prefix == path_prefix
+        ]
+        for grant_id in revoked_ids:
+            self.permission_grants.pop(grant_id, None)
+        return len(revoked_ids)
+
     def get_or_create_asset(
         self, workspace_id: str, path: str, name: str, created_by: str
     ) -> Asset:
@@ -167,6 +183,19 @@ class InMemoryControlPlaneRepository:
             path_history=path_history,
         )
         self._assets[asset_id] = asset
+        return asset
+
+    def remove_asset(self, asset_id: str) -> Asset | None:
+        """Remove an asset together with all of its versions."""
+        asset = self._assets.pop(asset_id, None)
+        if asset is None:
+            return None
+        for version_id in [
+            version_id
+            for version_id, version in self._asset_versions.items()
+            if version.asset_id == asset_id
+        ]:
+            self._asset_versions.pop(version_id, None)
         return asset
 
     def get_asset_version(self, asset_version_id: str) -> AssetVersion:

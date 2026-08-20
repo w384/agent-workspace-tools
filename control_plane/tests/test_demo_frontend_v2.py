@@ -185,3 +185,32 @@ def test_demo_frontend_qa_model_name_and_target_bar(client) -> None:
     assert "你没有访问该文件的权限" in app_js
     assert "该文件由其他账号上传，仅上传者有权检索" in app_js
     assert "可改用受控样例文件体验问答" in app_js
+
+
+def test_demo_frontend_qa_hint_and_knowledge_file_management(client) -> None:
+    index = _body(client, "/demo/")
+    # 问答页提示条：醒目说明两种提问方式（上传真实材料 / 选择受控样例）
+    assert 'id="qa-hint"' in index
+    assert "提问方式" in index
+    assert "上传真实材料（自动建库，仅上传者可查）" in index
+    assert "选择受控样例文件" in index
+    # 已建库文件管理区块：列出已建库文件名 + 手动删除
+    assert 'id="knowledge-manage"' in index
+    assert 'id="knowledge-file-list"' in index
+    assert "已建库文件管理" in index
+    assert "删除后可重新上传同名文件" in index
+    app_js = _body(client, "/demo/app.js")
+    # 加载 / 删除 / 重置交互
+    assert "loadKnowledgeFiles" in app_js
+    assert "renderKnowledgeFiles" in app_js
+    assert "deleteKnowledgeFile" in app_js
+    assert "resetKnowledgeFiles" in app_js
+    assert "/api/demo/knowledge/files" in app_js
+    assert "/api/demo/knowledge/files/delete" in app_js
+    # 重新登录后强制同步模型状态 + 加载已建库文件（修复云端 Key 残留）
+    assert "loadProviderStatus()" in app_js
+    assert "loadKnowledgeFiles()" in app_js
+    css = _body(client, "/demo/style.css")
+    assert ".qa-hint" in css
+    assert ".knowledge-file-item" in css
+    assert ".knowledge-file-del" in css

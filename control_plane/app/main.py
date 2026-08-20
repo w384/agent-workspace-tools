@@ -95,6 +95,10 @@ class KnowledgeQueryRequest(BaseModel):
     file_name: str
 
 
+class KnowledgeFileDeleteRequest(BaseModel):
+    file_name: str
+
+
 class CreatePlanRequest(BaseModel):
     operations: list[dict[str, object]]
     expires_at: str
@@ -570,6 +574,82 @@ def create_app(
             )
         return app.state.rag_port.query(actor, question, asset.asset_id)
 
+
+    @app.get("/api/demo/knowledge/files")
+    def knowledge_file_list(
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        """List uploaded real-material files visible to the current workspace.
+
+        Only files under 客户上传资料/* count as user-uploaded knowledge;
+        controlled samples are never listed here. can_delete is true only for
+        the uploader, matching the Q "manual delete for next demo" use case.
+        """
+        repository = app.state.repository
+        prefix = f"{UPLOADED_DIR}/"
+        files = []
+        for asset in repository.list_assets(actor.workspace_id):
+            if not asset.path.startswith(prefix):
+                continue
+            files.append(
+                {
+                    "name": asset.name,
+                    "asset_id": asset.asset_id,
+                    "version_id": asset.active_version_id,
+                    "created_by": asset.created_by,
+                    "can_delete": asset.created_by == actor.actor_id,
+                }
+            )
+        files.sort(key=lambda item: item["name"])
+        return {"workspace_id": actor.workspace_id, "files": files}
+
+    @app.post("/api/demo/knowledge/files/delete")
+    def knowledge_file_delete(
+        request: KnowledgeFileDeleteRequest,
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        """Delete one uploaded real-material file (owner-only).
+
+        Only the uploader may delete; the search-index slice is dropped and
+        the QUERY grant is revoked so the next demo can re-upload the same
+        file name. Deleting never touches controlled samples or any other
+        account's material.
+        """
+        file_name = request.file_name.strip()
+        if not file_name:
+            raise ApiError(422, "file_name_required", "File name is required")
+        if not _is_safe_file_name(file_name):
+            raise ApiError(422, "invalid_file_name", "File name is not allowed")
+        path = f"{UPLOADED_DIR}/{file_name}"
+        repository = app.state.repository
+        asset = repository.find_asset_by_path(actor.workspace_id, path)
+        if asset is None:
+            raise ApiError(
+                404,
+                "uploaded_file_not_found",
+                "Uploaded file not found",
+            )
+        if asset.created_by != actor.actor_id:
+            raise ApiError(
+                403,
+                "delete_not_authorized",
+                "Only the uploader can delete this file",
+            )
+        rag = app.state.rag_port
+        if hasattr(rag, "delete_uploaded_version"):
+            rag.delete_uploaded_version(
+                actor=actor,
+                asset=asset,
+                request_id=actor.request_id,
+            )
+        repository.remove_asset(asset.asset_id)
+        _append_knowledge_audit(
+            repository,
+            actor,
+            "uploaded_file_deleted",
+            {"file_name": file_name, "path": path},
+        )
+        return {"deleted": file_name, "path": path}
 
 
     @app.get("/api/llm/provider")

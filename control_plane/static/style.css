@@ -430,3 +430,73 @@ button[type="submit"]:hover {
   background: var(--danger-soft);
   color: var(--danger);
 }
+
+/* 问答提示条：醒目说明「上传真实材料或选择受控样例」两种提问方式 */
+.qa-hint {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid #f0c36d;
+  border-left: 4px solid #d97706;
+  border-radius: 10px;
+  background: #fff8e6;
+  color: #7c4a03;
+  font-size: 13px;
+}
+
+.qa-hint strong {
+  color: #92400e;
+}
+
+/* 已建库文件管理 */
+.knowledge-manage {
+  border-color: #c084fc;
+  background: #faf5ff;
+}
+
+.knowledge-manage h3 {
+  color: #7c3aed;
+}
+
+.knowledge-manage .uploaded-list {
+  border-top-color: #e9d5ff;
+}
+
+.knowledge-file-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.knowledge-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--card);
+}
+
+.knowledge-file-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.knowledge-file-del {
+  margin: 0;
+  padding: 5px 10px;
+  font-size: 12px;
+  border-color: #f3c1c1;
+  color: var(--danger);
+  background: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.knowledge-file-del:hover {
+  background: var(--danger-soft);
+}

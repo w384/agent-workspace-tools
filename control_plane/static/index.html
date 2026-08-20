@@ -71,6 +71,10 @@
         <div id="qa" class="tab-panel hidden">
           <h2>自然语言知识库问答</h2>
           <p>仅对当前会话授权可见的已激活版本做检索。</p>
+          <div class="qa-hint" id="qa-hint">
+            <strong>提问方式：</strong>本页支持两种提问方式，任选其一后点击「提问」——
+            ① 上传真实材料（自动建库，仅上传者可查）；② 选择受控样例文件。
+          </div>
           <div class="model-switch" id="model-switch">
   <h3>问答模型</h3>
           <div class="model-switch-buttons" role="group" aria-label="问答模型选择">
@@ -125,6 +129,13 @@
           </div>
 <button type="submit">提问</button>
           </form>
+          <div class="file-picker knowledge-manage" id="knowledge-manage">
+            <h3>已建库文件管理</h3>
+            <p class="muted">
+              已上传并建库的真实材料文件列表；删除后可重新上传同名文件，便于下次演示。受控样例文件不受影响。
+            </p>
+            <div id="knowledge-file-list" class="uploaded-list"></div>
+          </div>
           <pre id="qa-result" class="output"></pre>
         </div>
       </section>
