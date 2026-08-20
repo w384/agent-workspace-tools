@@ -74,7 +74,7 @@
     # RAG 检索服务（LLM 生成 / 解释端口 / 文档解析 / 权限感知检索等）
     python -m pytest service/tests/rag -q
 
-核心验收口径：RAG LLM 20 passed、控制面 ≥101 passed、service ≥146 passed、git diff --check 通过。
+核心验收口径：RAG LLM 20 passed、控制面 112 passed、service/tests/rag 72 passed、git diff --check 通过。
 
 ## 免责声明
 
