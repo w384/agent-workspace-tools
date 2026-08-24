@@ -21,7 +21,13 @@ from .domain import (
 )
 from .plan_hash import PlanHashInput, PlanHashSnapshot, compute_canonical_plan_hash, plan_hash_matches
 from .policy import evaluate_authorization
-from .ports import FileExecutorPort, RagPort
+from .ports import (
+    FileExecutorPort,
+    RagPort,
+    VerificationPort,
+    VerificationResult,
+    VerificationStatus,
+)
 from .repository import ControlPlaneRepository
 
 
@@ -96,6 +102,10 @@ class ExecutorExecutionFailedError(Exception):
     pass
 
 
+class VerificationMismatchError(Exception):
+    pass
+
+
 class RuleSourceNotAllowedError(Exception):
     pass
 
@@ -160,6 +170,7 @@ class ControlPlaneService:
         file_executor: FileExecutorPort,
         rag_port: RagPort,
         approver_role_id: str,
+        verification_port: VerificationPort | None = None,
         disclaimer_version: str = "disclaimer-demo-v1",
         disclaimer_text: str = "仅供资料完整度与规则匹配演示参考",
     ) -> None:
@@ -173,6 +184,7 @@ class ControlPlaneService:
         self._file_executor = file_executor
         self._rag_port = rag_port
         self._approver_role_id = approver_role_id
+        self._verification_port = verification_port
         self._disclaimer_version = disclaimer_version
         self._disclaimer_text = disclaimer_text
 
@@ -928,6 +940,29 @@ class ControlPlaneService:
                 approval,
             )
             raise ExecutorExecutionFailedError
+        if self._verification_port is not None:
+            verification = self._verification_port.verify(
+                execution_actor, plan, result
+            )
+            if (
+                verification.matched
+                and verification.status == VerificationStatus.VERIFIED
+            ):
+                return self._complete_verified_execution(
+                    execution_actor,
+                    plan,
+                    queued,
+                    verification,
+                    approval,
+                )
+            self._record_unverified_execution(
+                execution_actor,
+                plan,
+                queued,
+                verification,
+                approval,
+            )
+            raise VerificationMismatchError from None
         self._apply_completed_path_updates(plan)
         completed = self._repository.update_execution_job(replace(queued, state="completed"))
         self._repository.update_plan(replace(plan, state="completed"))
@@ -957,6 +992,78 @@ class ControlPlaneService:
                 snapshot["asset_id"],
                 str(operation["target_path"]),
             )
+
+    def _complete_verified_execution(
+        self,
+        actor: TrustedActorContext,
+        plan: Plan,
+        job: ExecutionJob,
+        verification: VerificationResult,
+        approval: Approval | None = None,
+    ) -> ExecutionJob:
+        self._apply_completed_path_updates(plan)
+        verified = self._repository.update_execution_job(replace(job, state="verified"))
+        self._repository.update_plan(replace(plan, state="verified"))
+        details: dict[str, object] = {
+            "plan_id": plan.plan_id,
+            "job_id": verified.job_id,
+            "verification_status": verification.status.value,
+            "expected_state": verification.expected_state,
+            "actual_state": verification.actual_state,
+            "evidence": verification.evidence,
+        }
+        if approval is not None:
+            details["approval_id"] = approval.approval_id
+            details["approver_id"] = approval.approver_id or ""
+        self._repository.append_audit_event(
+            _audit_event(
+                event_type="execution_verified",
+                actor_id=actor.actor_id,
+                request_id=actor.request_id,
+                run_id=actor.run_id,
+                details=details,
+            )
+        )
+        return verified
+
+    def _record_unverified_execution(
+        self,
+        actor: TrustedActorContext,
+        plan: Plan,
+        job: ExecutionJob,
+        verification: VerificationResult,
+        approval: Approval | None = None,
+    ) -> ExecutionJob:
+        state = {
+            VerificationStatus.MISMATCH: "mismatch",
+            VerificationStatus.UNKNOWN: "unknown",
+            VerificationStatus.NEEDS_RECOVERY: "needs_recovery",
+            VerificationStatus.ESCALATED: "escalated",
+        }.get(verification.status, "unverified")
+        recorded = self._repository.update_execution_job(replace(job, state=state))
+        self._repository.update_plan(replace(plan, state=state))
+        details: dict[str, object] = {
+            "plan_id": plan.plan_id,
+            "job_id": recorded.job_id,
+            "verification_status": verification.status.value,
+            "reason": verification.reason,
+            "expected_state": verification.expected_state,
+            "actual_state": verification.actual_state,
+            "evidence": verification.evidence,
+        }
+        if approval is not None:
+            details["approval_id"] = approval.approval_id
+            details["approver_id"] = approval.approver_id or ""
+        self._repository.append_audit_event(
+            _audit_event(
+                event_type="execution_verification_failed",
+                actor_id=actor.actor_id,
+                request_id=actor.request_id,
+                run_id=actor.run_id,
+                details=details,
+            )
+        )
+        return recorded
 
     def _execution_actor(
         self, caller_actor: TrustedActorContext, plan: Plan

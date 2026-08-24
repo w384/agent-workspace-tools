@@ -1,8 +1,9 @@
 from dataclasses import dataclass
+from enum import Enum
 from typing import Mapping
 from typing import Protocol
 
-from .domain import AssetVersion, RuleVersion, TrustedActorContext
+from .domain import AssetVersion, Plan, RuleVersion, TrustedActorContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +18,34 @@ class ExecutionResult:
     status: str
     operation_id: str
     failure_code: str | None = None
+
+
+class VerificationStatus(str, Enum):
+    VERIFIED = "verified"
+    MISMATCH = "mismatch"
+    UNKNOWN = "unknown"
+    NEEDS_RECOVERY = "needs_recovery"
+    ESCALATED = "escalated"
+
+
+@dataclass(frozen=True, slots=True)
+class VerificationResult:
+    status: VerificationStatus
+    operation_id: str
+    matched: bool
+    expected_state: Mapping[str, object]
+    actual_state: Mapping[str, object]
+    evidence: Mapping[str, object]
+    reason: str = ""
+
+
+class VerificationPort(Protocol):
+    def verify(
+        self,
+        actor: TrustedActorContext,
+        plan: Plan,
+        execution_result: ExecutionResult,
+    ) -> VerificationResult: ...
 
 
 @dataclass(frozen=True, slots=True)
