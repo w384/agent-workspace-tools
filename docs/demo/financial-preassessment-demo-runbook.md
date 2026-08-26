@@ -106,6 +106,17 @@
 - 预期输出：HTTP 403；status=DENIED、reason=ACCESS_DENIED、retrieved_count=0、llm_invoked=false、citations=[]；解析、索引、评分、LLM 与报告均零触发。
 - 留证点：403 响应截图；assessment_denied 审计零计数截图。
 
+### 步骤 11：控制面计划执行闭环（Agent Action Gateway 可验证执行，可选演示）
+
+- 展示内容：演示服务（init 脚本 main() 接线）已启用真实受控目录执行器 ControlledFileExecutor 与同根独立读回验证器 ControlledDirectoryVerifier（受控根 work/demo/financial-preassessment/controlled-actions/，已加入 .gitignore）。被授权的计划在运行中的 /demo 服务上真实执行并可独立读回验证，形成「计划 → 确认 → 执行 → 读回 → VERIFIED」闭环。本环节为 API 级演示（前端暂未提供计划操作 UI），作为可选增强演示，不占主故事。
+- 输入：
+  ① 登录 alice（demo-a-password），POST /api/uploads 上传一个文本文件（directory=organized，file=report.txt）；
+  ② POST /api/plans 创建 move_rename 计划（source_path=organized/report.txt → target_path=organized/report-moved.txt），决策等级 SELF_CONFIRM；
+  ③ POST /api/plans/{plan_id}/confirm（带 Idempotency-Key），计划真实执行并独立读回验证。
+- 预期输出：confirm 响应 execution_job.state=verified、plan.state=verified；审计事件 execution_verified（verification_status=verified）；受控根内真实文件变化——organized/report.txt 消失、organized/report-moved.txt 存在且内容指纹一致。破坏性操作（trash）走 APPROVAL_REQUIRED，需审批者 decide_approval 后执行并读回 VERIFIED。
+- 留证点：confirm 响应 execution_job=verified 截图；审计 execution_verified 事件截图；受控根实际文件状态（源消失、目标存在）。
+- 负向分支（不必实机演示）：执行器层路径逃逸 fail-closed（create_plan 越界路径 → PermissionError）；验证失败 → HTTP 422 verification_failed + recovery_task（服务层 test_trash_verification / HTTP test_recovery_approval_http 已覆盖 MISMATCH→恢复/升级闭环）。
+
 ## 敏感信息禁显项
 
 - 不得展示真实 API Key、内部服务密钥或一次性凭证。
@@ -123,8 +134,8 @@
 
 ## 边界声明
 
-- 真实 LLM 接入（AnswerGenerator/ExplanationPort + BFF 桥接）：P0 在途，实施归 RAG 后台 + 控制面，执行总负责统筹验收与集成；演示期使用受控 demo LLM 凭证（脱敏），不落前端、不入库明文。
-- 真实上传自动解析与索引：NOT_DONE。
+- 真实 LLM 接入（AnswerGenerator/ExplanationPort + BFF 桥接 + 越权负向 bob 演示身份）：已完成（提交 4d0c241）；演示期使用受控 demo LLM 凭证（脱敏），不落前端、不入库明文。
+- 真实上传自动解析与索引：已完成（提交 5227ed3，真实材料上传→SHA-256 指纹→PDF/DOCX 解析→向量索引→授权绑定→权限感知检索闭环）。
 - Dify 页面实机解释与截图：NOT_RUN。
 - Qdrant、真实 PostgreSQL、OS 级 parser sandbox：NOT_DONE。
 - Windows/SMB 独立服务账号、UNC 与 ACL 旁路写验证：NOT_RUN。
