@@ -5,6 +5,15 @@ the executor's self-report. After an executor claims completion, this
 adapter independently reads back the real state of the controlled
 directory (file existence + SHA-256) and compares it against the plan's
 expected target state derived from asset snapshots.
+
+File-level operations carry their own read-back semantics:
+  - upload:      target file must exist with the expected SHA-256 fingerprint;
+  - move_rename: source must be gone and target must carry the expected
+                 fingerprint;
+  - trash:       destructive op — source file must no longer exist (removed
+                 from the controlled directory);
+  - other op types (create_folder, ...) are reported as UNKNOWN because
+    they cannot be independently read back here.
 """
 
 from dataclasses import dataclass
@@ -33,13 +42,28 @@ def _read_file_state(path: Path) -> dict[str, object]:
     }
 
 
+def _entry_matches(entry: dict[str, object]) -> bool:
+    """Whether a single read-back entry matches the plan's expected state."""
+    op_type = entry.get("operation_type")
+    if op_type == "upload":
+        return entry.get("fingerprint_matches") is True
+    if op_type == "move_rename":
+        return (
+            entry.get("fingerprint_matches") is True
+            and entry.get("source_exists") is False
+        )
+    if op_type == "trash":
+        return entry.get("file_removed") is True
+    return False
+
+
 @dataclass(frozen=True, slots=True)
 class ControlledDirectoryVerifier:
     """Read-back verifier over a controlled local directory.
 
-    Only verifies file-level operations (upload / move_rename) that carry an
-    asset snapshot; other operation types are reported as UNKNOWN because
-    they cannot be independently read back here.
+    Only verifies file-level operations (upload / move_rename / trash) that
+    carry an asset snapshot; other operation types are reported as UNKNOWN
+    because they cannot be independently read back here.
     """
 
     controlled_dir: Path
@@ -104,6 +128,23 @@ class ControlledDirectoryVerifier:
                         ),
                     }
                 )
+            elif op_type is Action.TRASH:
+                source = self.controlled_dir / str(operation["source_path"]).lstrip("/")
+                expected_entries.append(
+                    {
+                        "operation_type": "trash",
+                        "path": str(operation["source_path"]),
+                    }
+                )
+                source_exists = source.exists()
+                actual_entries.append(
+                    {
+                        "operation_type": "trash",
+                        "path": str(operation["source_path"]),
+                        "source_exists": source_exists,
+                        "file_removed": not source_exists,
+                    }
+                )
             else:
                 unverifiable.append(str(operation.get("operation_id", "")))
 
@@ -129,14 +170,7 @@ class ControlledDirectoryVerifier:
                 reason="no_file_level_operations_to_read_back",
             )
 
-        all_match = all(
-            entry.get("fingerprint_matches") is True
-            and (
-                entry.get("operation_type") != "move_rename"
-                or entry.get("source_exists") is False
-            )
-            for entry in actual_entries
-        )
+        all_match = all(_entry_matches(entry) for entry in actual_entries)
         if all_match:
             return VerificationResult(
                 status=VerificationStatus.VERIFIED,
@@ -150,6 +184,15 @@ class ControlledDirectoryVerifier:
                 },
                 reason="",
             )
+        mismatch_reason = (
+            "trash_readback_failed"
+            if any(
+                entry.get("operation_type") == "trash"
+                and entry.get("file_removed") is not True
+                for entry in actual_entries
+            )
+            else "readback_fingerprint_mismatch"
+        )
         return VerificationResult(
             status=VerificationStatus.MISMATCH,
             operation_id=execution_result.operation_id,
@@ -160,10 +203,8 @@ class ControlledDirectoryVerifier:
                 "read_back": "controlled_directory",
                 "entries_checked": len(actual_entries),
                 "mismatched_entries": sum(
-                    1
-                    for entry in actual_entries
-                    if entry.get("fingerprint_matches") is not True
+                    1 for entry in actual_entries if not _entry_matches(entry)
                 ),
             },
-            reason="readback_fingerprint_mismatch",
+            reason=mismatch_reason,
         )
