@@ -134,8 +134,26 @@ Verification Adapter
 | VERIFIED | 独立读回与批准计划一致 | 应用路径更新，job/plan → verified，审计 `execution_verified` |
 | MISMATCH | 独立读回发现实际状态与预期不符 | 不应用路径更新，job/plan → mismatch，审计 `execution_verification_failed`，抛 `VerificationMismatchError`，阻止伪成功 |
 | UNKNOWN | 无法独立读回 / 无法判定 | 不标记 verified，job/plan → unknown，审计 `execution_verification_failed` |
-| NEEDS_RECOVERY | 动作未按预期落地，需要恢复 | 预留恢复路径，job/plan → needs_recovery |
-| ESCALATED | 需人工 / 上级升级处理 | 预留升级路径，job/plan → escalated |
+| NEEDS_RECOVERY | 动作未按预期落地，需要恢复 | 已实现：job/plan → needs_recovery，自动创建 RecoveryTask（strategy=auto_compensation，state=pending），审计 recovery_task_created |
+| ESCALATED | 需人工 / 上级升级处理 | 已实现：job/plan → escalated，自动创建 RecoveryTask（strategy=escalate，state=pending），审计 recovery_task_created |
+
+### 五.1 恢复 / 升级闭环（Recovery Task）
+
+验证失败（MISMATCH / UNKNOWN / NEEDS_RECOVERY / ESCALATED）不再停留在静态
+异常状态，而是进入可处理的恢复闭环：
+
+- 自动创建 RecoveryTask（state=pending），strategy 按状态映射：
+  MISMATCH → retry_compensation、UNKNOWN → manual_review、
+  NEEDS_RECOVERY → auto_compensation、ESCALATED → escalate；
+  审计事件 recovery_task_created。
+- GET /api/recovery-tasks 按 workspace 隔离列出 pending 恢复任务。
+- POST /api/recovery-tasks/{id}/resolve：decision=recovered → task/plan →
+  recovered（审计 recovery_resolved）；decision=escalated → task/plan →
+  escalated（审计 recovery_escalated）。任务已处理 / 非法 decision → 409，
+  未知 id → 404。
+- confirm_plan / decide_approval 触发验证失败时返回 422
+  verification_failed，并在 error.details.recovery_task 附带最新 pending
+  任务，供前端引导恢复 / 升级动作。
 
 ## 六、兼容与演进
 

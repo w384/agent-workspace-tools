@@ -39,11 +39,14 @@ from .service import (
     PlanNotFoundError,
     PlanRevalidationError,
     PlanStateError,
+    RecoveryTaskNotFoundError,
+    RecoveryTaskStateError,
     RagEnqueueFailedError,
     RuleSourceNotAllowedError,
     RuleVersionNotFoundError,
     UploadDeniedError,
     UploadTargetExistsError,
+    VerificationMismatchError,
 )
 from .sessions import (
     DemoIdentity,
@@ -117,6 +120,10 @@ class DecideApprovalRequest(BaseModel):
     role_ids: list[str] | None = None
 
 
+class ResolveRecoveryRequest(BaseModel):
+    decision: str
+
+
 class CreateRuleSetRequest(BaseModel):
     scenario: str
     name: str
@@ -137,11 +144,18 @@ class CreateAssessmentRequest(BaseModel):
 
 
 class ApiError(Exception):
-    def __init__(self, status_code: int, code: str, message: str) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        details: dict[str, object] | None = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.code = code
         self.message = message
+        self.details = details
 
 
 def create_app(
@@ -214,6 +228,8 @@ def create_app(
         content: dict[str, object] = {
             "error": {"code": error.code, "message": error.message}
         }
+        if error.details is not None:
+            content["error"]["details"] = error.details
         if error.code == "assessment_denied":
             content = {
                 "status": "DENIED",
@@ -821,6 +837,17 @@ def create_app(
             raise ApiError(403, "executor_acl_denied", "Execution is not authorized") from error
         except ExecutorExecutionFailedError as error:
             raise ApiError(502, "executor_execution_failed", "Execution failed") from error
+        except VerificationMismatchError as error:
+            recovery_payload = _latest_pending_recovery_payload(service, actor, plan_id)
+            details: dict[str, object] | None = None
+            if recovery_payload is not None:
+                details = {"recovery_task": recovery_payload}
+            raise ApiError(
+                422,
+                "verification_failed",
+                "Execution did not verify against target state",
+                details=details,
+            ) from error
         return _confirmation_payload(outcome)
 
     @app.get("/api/approvals/pending")
@@ -870,7 +897,51 @@ def create_app(
             raise ApiError(403, "executor_acl_denied", "Execution is not authorized") from error
         except ExecutorExecutionFailedError as error:
             raise ApiError(502, "executor_execution_failed", "Execution failed") from error
+        except VerificationMismatchError as error:
+            plan_id = repository.get_approval(approval_id).plan_id
+            recovery_payload = _latest_pending_recovery_payload(service, actor, plan_id)
+            details = None
+            if recovery_payload is not None:
+                details = {"recovery_task": recovery_payload}
+            raise ApiError(
+                422,
+                "verification_failed",
+                "Execution did not verify against target state",
+                details=details,
+            ) from error
         return _approval_decision_payload(outcome)
+
+    @app.get("/api/recovery-tasks")
+    def list_recovery_tasks(
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        return {
+            "tasks": [
+                _recovery_task_payload(task)
+                for task in service.list_recovery_tasks(actor)
+            ]
+        }
+
+    @app.post("/api/recovery-tasks/{recovery_id}/resolve")
+    def resolve_recovery_task(
+        recovery_id: str,
+        request: ResolveRecoveryRequest,
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        try:
+            outcome = service.resolve_recovery_task(
+                actor=actor,
+                recovery_id=recovery_id,
+                decision=request.decision,
+            )
+        except RecoveryTaskNotFoundError as error:
+            raise ApiError(404, "recovery_task_not_found", "Recovery task not found") from error
+        except RecoveryTaskStateError as error:
+            raise ApiError(409, "recovery_task_state_error", "Invalid recovery task state or decision") from error
+        return {
+            "task": _recovery_task_payload(outcome.task),
+            "plan": _plan_payload(outcome.plan),
+        }
 
     @app.post("/internal/asset-versions/{asset_version_id}/index-status")
     def update_index_status(
@@ -920,6 +991,34 @@ def _plan_payload(plan) -> dict[str, object]:
     payload = asdict(plan)
     payload["decision_state"] = plan.decision_state.value
     return payload
+
+
+def _recovery_task_payload(task) -> dict[str, object]:
+    return {
+        "recovery_id": task.recovery_id,
+        "plan_id": task.plan_id,
+        "job_id": task.job_id,
+        "workspace_id": task.workspace_id,
+        "state": task.state,
+        "strategy": task.strategy,
+        "reason": task.reason,
+        "details": dict(task.details),
+        "created_at": task.created_at,
+        "resolved_at": task.resolved_at,
+        "resolved_by": task.resolved_by,
+    }
+
+
+def _latest_pending_recovery_payload(service, actor, plan_id: str) -> dict[str, object] | None:
+    candidates = [
+        task
+        for task in service.list_recovery_tasks(actor)
+        if task.plan_id == plan_id and task.state == "pending"
+    ]
+    if not candidates:
+        return None
+    latest = max(candidates, key=lambda task: task.created_at)
+    return _recovery_task_payload(latest)
 
 
 def _approval_payload(approval) -> dict[str, object]:
