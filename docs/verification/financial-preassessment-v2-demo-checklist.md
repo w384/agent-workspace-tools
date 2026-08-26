@@ -173,6 +173,21 @@ git diff --check
 - 提交链（main，未推送 origin）：9c839b9 feat(scripts): demo fixture 离线完整性自检（可信启动）；0873f39 feat(control_plane): MCP 暴露层支持 Agent 身份（agent_id）——继承用户授权、动作审计留痕、越权负向不变。
 - 红线：未 push origin、未建分支、main 直链保持；工作区仅剩既有 work/.tmp-demo-serve.log* 与受限 ACL 目录残留（随批次处理，非本轮改动）。
 
+## 实际结果（2026-08-26 实测 · v3 自主优化批次 C：演示服务接入真实受控目录执行器）
+
+背景：此前 init 脚本注入 file_executor=object() 且未注入 verification_port，导致「计划→确认→执行→独立读回验证」闭环在运行中的演示服务上不可用（被授权计划一旦命中执行器即 AttributeError/500）。本轮实现真实受控目录执行器并接入 init 脚本：
+
+- 新增 control_plane/app/controlled_file_executor.py（ControlledFileExecutor，实现 FileExecutorPort）：
+  - 所有操作路径 resolve 后必须仍位于受控根内，越界直接抛 PermissionError（执行器层 fail-closed，不依赖 policy 层先拦截）；
+  - upload 真实写盘受控目录并返回真实 SHA-256 的 UploadResult（重复目标抛 FileExistsError）；
+  - create_plan 校验路径并按 executor_plan_id 记录规范化操作；confirm_and_execute 重放 move_rename/trash/upload（move 用 shutil.move、trash 删源文件、upload 复验目标存在）；
+  - 受控根 work/demo/financial-preassessment/controlled-actions/（已加入 .gitignore）。
+- init 脚本（scripts/init_demo_financial_preassessment.py）：file_executor 换 ControlledFileExecutor、注入 verification_port=ControlledDirectoryVerifier(同根)；serving 打印「计划执行闭环已启用」。
+- 新增 test_controlled_file_executor.py（6 项）：move_rename 真实移动后读回 VERIFIED（job/plan=verified + 审计 execution_verified + 目标存在/源消失）；trash 真实删除后读回 VERIFIED；路径逃逸 create_plan 抛 PermissionError；upload 真实写盘并返回真实 SHA-256；upload 重复目标抛 FileExistsError；镜像 init main() 接线的 HTTP 闭环（登录 → 上传 → 计划 → SELF_CONFIRM 确认 → execution_job verified + 磁盘真实移动）。
+- 集成回归（提权，新鲜原始输出）：control_plane/tests 全量 162 passed in 3.88s（156 + 6 新增）；RAG LLM（test_llm_answer_generator + test_llm_explanation_port）20 passed in 0.07s；service/tests/rag 72 passed in 0.27s；git diff --check exit 0（仅既有 LF 转 CRLF warning）。
+- 提交（main，未推送 origin）：1f88695 feat(control_plane): 演示服务接入真实受控目录执行器与读回验证（替代 file_executor=object()）（4 files +449/-2）。
+- 红线：未 push origin、未建分支、main 直链保持。
+
 ## 关键断言
 
 路径 B（LLM 知识库问答）：

@@ -161,3 +161,4 @@ Verification Adapter
 - 「强制验证」为后续演进项：验证成为必选，无验证适配器的执行一律不允许标记完成。
 - 首个真实验证适配器：对受控本地目录做真实读回（文件存在 + SHA-256 指纹比对），支撑「执行器谎报 vs 实际未写入」负向演示。
 - 文件级操作读回语义：upload 期望目标存在且指纹一致；move_rename 期望源消失且目标指纹一致；trash（破坏性操作）期望源文件已从受控目录消失——文件仍存在即 MISMATCH（reason=trash_readback_failed），阻断「伪删除」。
+- 演示服务接线（init 脚本）：已从占位 file_executor=object() 切换为真实受控目录执行器（ControlledFileExecutor，受控根 work/demo/financial-preassessment/controlled-actions/，所有操作路径 resolve 后必须仍位于受控根内，越界抛 PermissionError fail-closed）+ 同根独立读回验证器（ControlledDirectoryVerifier）。被授权的计划在运行中的 /demo 服务上真实执行并可读回验证；无授权时仍由 policy 层先行拒绝，执行器层防御不替代策略层。
