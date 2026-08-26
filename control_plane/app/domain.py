@@ -39,6 +39,7 @@ class TrustedActorContext:
     run_id: str
     role_ids: frozenset[str]
     group_ids: frozenset[str] = frozenset()
+    agent_id: str | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("session_id", "request_id", "run_id"):
@@ -198,6 +199,7 @@ class AuditEvent:
     actor_id: str
     request_id: str
     run_id: str = ""
+    agent_id: str | None = None
     details: Mapping[str, object] = field(default_factory=dict)
 
 

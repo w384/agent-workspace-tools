@@ -30,6 +30,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from control_plane.app.domain import (
     Action,
+    AuditEvent,
     RuleVersion,
     TrustedActorContext,
 )
@@ -56,6 +57,15 @@ def _require(arguments: Mapping[str, object], key: str, expected_type: type) -> 
     value = arguments[key]
     if not isinstance(value, expected_type):
         raise ValueError(f"argument {key} must be {expected_type.__name__}")
+    return value
+
+
+def _optional_str(arguments: Mapping[str, object], key: str) -> str | None:
+    value = arguments.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"argument {key} must be a non-empty string when provided")
     return value
 
 
@@ -117,7 +127,9 @@ class MCPDemoServer:
                 "企业 Agent 安全运行样板间控制面 MCP 暴露层：提供 Policy（authz_check）、"
                 "Assess（assess_materials）、Query（query_knowledge）、Audit（list_audit_events）"
                 "四个工具，均为演示能力，不代表真实授信结论。演示账号：alice（已授权）、"
-                "bob（无 QUERY 授权，用于越权负向演示）。"
+                "bob（无 QUERY 授权，用于越权负向演示）。可选传入 agent_id 演示"
+                "「Agent 代表用户执行」：Agent 继承所属用户授权，动作在审计中留痕；"
+                "无 QUERY 授权用户的 Agent 同样被拒绝。"
             ),
         }
 
@@ -135,6 +147,10 @@ class MCPDemoServer:
                         "actor_id": {
                             "type": "string",
                             "description": "演示账号：alice（已授权）或 bob（无 QUERY 授权）",
+                        },
+                        "agent_id": {
+                            "type": "string",
+                            "description": "可选：Agent 名（如 agent-alice-1）。授权继承所属用户，动作以 Agent 身份留痕",
                         },
                         "action": {
                             "type": "string",
@@ -158,6 +174,10 @@ class MCPDemoServer:
                     "type": "object",
                     "properties": {
                         "actor_id": {"type": "string", "description": "演示账号：alice 或 bob"},
+                        "agent_id": {
+                            "type": "string",
+                            "description": "可选：Agent 名；授权继承所属用户，审计留痕 agent_id",
+                        },
                         "asset_ids": {
                             "type": "array",
                             "items": {"type": "string"},
@@ -181,6 +201,10 @@ class MCPDemoServer:
                     "type": "object",
                     "properties": {
                         "actor_id": {"type": "string", "description": "演示账号：alice 或 bob"},
+                        "agent_id": {
+                            "type": "string",
+                            "description": "可选：Agent 名；授权继承所属用户，审计留痕 agent_id",
+                        },
                         "asset_id": {"type": "string", "description": "资产 ID"},
                         "question": {"type": "string", "description": "自然语言问题"},
                     },
@@ -221,7 +245,9 @@ class MCPDemoServer:
 
     # -- actor resolution ---------------------------------------------------
 
-    def _resolve_actor(self, username: str) -> TrustedActorContext:
+    def _resolve_actor(
+        self, username: str, agent_id: str | None = None
+    ) -> TrustedActorContext:
         identity = self._identities.get(username)
         if identity is None:
             raise ValueError(f"unknown demo actor: {username!r}")
@@ -234,6 +260,38 @@ class MCPDemoServer:
             run_id=f"run-{uuid.uuid4().hex[:12]}",
             role_ids=frozenset(identity.role_ids),
             group_ids=frozenset(identity.group_ids),
+            agent_id=agent_id,
+        )
+
+    def _record_agent_action(
+        self,
+        actor: TrustedActorContext,
+        *,
+        tool: str,
+        status: str,
+        details: Mapping[str, object] | None = None,
+    ) -> None:
+        """Record a repository audit event when an agent (not a plain user) acted.
+
+        The agent inherits its owning user's grants; this event keeps the agent
+        identity, the executed tool and the observed status on the audit trail.
+        """
+        if actor.agent_id is None:
+            return
+        self._repository.append_audit_event(
+            AuditEvent(
+                event_id=str(uuid.uuid4()),
+                event_type="agent_action_executed",
+                actor_id=actor.actor_id,
+                agent_id=actor.agent_id,
+                request_id=actor.request_id,
+                run_id=actor.run_id,
+                details={
+                    "tool": tool,
+                    "status": status,
+                    **(dict(details) if details else {}),
+                },
+            )
         )
 
     def _fixture_rule_version(self) -> RuleVersion:
@@ -248,7 +306,8 @@ class MCPDemoServer:
         actor_id = str(_require(arguments, "actor_id", str))
         action_name = str(_require(arguments, "action", str))
         path = str(_require(arguments, "path", str))
-        actor = self._resolve_actor(actor_id)
+        agent_id = _optional_str(arguments, "agent_id")
+        actor = self._resolve_actor(actor_id, agent_id)
         try:
             action = Action(action_name)
         except ValueError:
@@ -259,8 +318,15 @@ class MCPDemoServer:
             action,
             (path,),
         )
+        self._record_agent_action(
+            actor,
+            tool="authz_check",
+            status=decision.state.value,
+            details={"action": action.value, "path": path},
+        )
         return {
             "actor_id": actor.actor_id,
+            "agent_id": actor.agent_id,
             "workspace_id": actor.workspace_id,
             "action": action.value,
             "path": path,
@@ -272,7 +338,8 @@ class MCPDemoServer:
         actor_id = str(_require(arguments, "actor_id", str))
         asset_ids = list(_require(arguments, "asset_ids", list))
         query_subject = str(arguments.get("query_subject", "模拟客户资料匹配度"))
-        actor = self._resolve_actor(actor_id)
+        agent_id = _optional_str(arguments, "agent_id")
+        actor = self._resolve_actor(actor_id, agent_id)
         versions = []
         for asset_id in asset_ids:
             asset = self._repository.get_asset(str(asset_id))
@@ -290,8 +357,15 @@ class MCPDemoServer:
             rule_version,
             query_subject,
         )
+        self._record_agent_action(
+            actor,
+            tool="assess_materials",
+            status=result.result_level,
+            details={"asset_count": len(versions)},
+        )
         return {
             "actor_id": actor.actor_id,
+            "agent_id": actor.agent_id,
             "match_score": result.match_score,
             "result_level": result.result_level,
             "missing_materials": list(result.missing_materials),
@@ -304,8 +378,17 @@ class MCPDemoServer:
         actor_id = str(_require(arguments, "actor_id", str))
         asset_id = str(_require(arguments, "asset_id", str))
         question = str(_require(arguments, "question", str))
-        actor = self._resolve_actor(actor_id)
-        return dict(self._rag_port.query(actor, question, asset_id))
+        agent_id = _optional_str(arguments, "agent_id")
+        actor = self._resolve_actor(actor_id, agent_id)
+        payload = dict(self._rag_port.query(actor, question, asset_id))
+        self._record_agent_action(
+            actor,
+            tool="query_knowledge",
+            status=str(payload.get("status", "UNKNOWN")),
+            details={"asset_id": asset_id, "llm_invoked": payload.get("llm_invoked")},
+        )
+        payload["agent_id"] = actor.agent_id
+        return payload
 
     def _tool_list_audit_events(self, arguments: Mapping[str, object]) -> dict[str, object]:
         limit_raw = arguments.get("limit", 20)
@@ -318,6 +401,7 @@ class MCPDemoServer:
                     "event_id": event.event_id,
                     "event_type": event.event_type,
                     "actor_id": event.actor_id,
+                    "agent_id": event.agent_id,
                     "request_id": event.request_id,
                     "run_id": event.run_id,
                     "details": dict(event.details),
