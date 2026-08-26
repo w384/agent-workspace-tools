@@ -13,14 +13,16 @@ E3 (P0) of the v2 finance demo slice. The script:
   control_plane/tests/test_init_demo_financial_preassessment.py.
 
 Usage:
-  python scripts/init_demo_financial_preassessment.py                # seed + serve /demo
-  python scripts/init_demo_financial_preassessment.py --seed-only     # seed, print summary, exit
+  python scripts/init_demo_financial_preassessment.py                # verify + seed + serve /demo
+  python scripts/init_demo_financial_preassessment.py --seed-only     # verify + seed, print summary, exit
+  python scripts/init_demo_financial_preassessment.py --verify        # read-only integrity self-check, exit 0/1
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import json
 import sys
 import uuid
@@ -46,6 +48,7 @@ from control_plane.app.repository import InMemoryControlPlaneRepository
 DEMO_ROOT = PROJECT_ROOT / "work" / "demo" / "financial-preassessment"
 SOURCE_ROOT = DEMO_ROOT / "source"
 IMPORT_MANIFEST_PATH = DEMO_ROOT / "import-manifest.json"
+INTEGRITY_PATH = DEMO_ROOT / "fixture-integrity.json"
 RULES_PATH = DEMO_ROOT / "rules" / "demo-bank-rules-v1.json"
 
 SCENARIO = "finance_profile_matching"
@@ -66,12 +69,30 @@ def seed_financial_preassessment_demo(
     *,
     source_root: Path = SOURCE_ROOT,
     import_manifest_path: Path = IMPORT_MANIFEST_PATH,
+    integrity_path: Path | None = None,
     rules_path: Path = RULES_PATH,
     workspace_id: str = WORKSPACE_ID,
     actor_id: str = ACTOR_ID,
     context_version: str = CONTEXT_VERSION,
 ) -> dict[str, object]:
     """Seed (or re-confirm) the demo state; idempotent by design."""
+    if integrity_path is not None:
+        verification = verify_demo_fixture_integrity(
+            source_root=source_root,
+            import_manifest_path=import_manifest_path,
+            integrity_path=integrity_path,
+            rules_path=rules_path,
+        )
+        if not verification["ok"]:
+            failed = [
+                str(check["name"])
+                for check in verification["checks"]
+                if not check["ok"]
+            ]
+            raise ValueError(
+                "finance demo fixture integrity check failed before seeding: "
+                + ", ".join(failed)
+            )
     manifest = _read_json(import_manifest_path)
     _require_keys(manifest, "source_type", "scenario", "assets")
     if manifest["source_type"] != SOURCE_TYPE or manifest["scenario"] != SCENARIO:
@@ -211,6 +232,130 @@ def seed_financial_preassessment_demo(
     }
 
 
+def verify_demo_fixture_integrity(
+    *,
+    source_root: Path = SOURCE_ROOT,
+    import_manifest_path: Path = IMPORT_MANIFEST_PATH,
+    integrity_path: Path = INTEGRITY_PATH,
+    rules_path: Path = RULES_PATH,
+) -> dict[str, object]:
+    """Read-only integrity self-check for the isolated-deployment trusted start.
+
+    Verifies the controlled demo fixture without mutating any state:
+      - the import manifest and integrity declarations are structurally valid;
+      - manifest and integrity declare exactly the same file set;
+      - every declared sample file exists inside source_root (no path escape);
+      - every sample file's actual SHA-256 equals its declared fingerprint
+        (detects a replaced, corrupted or missing deployment artifact);
+      - the rules fixture content_fingerprint matches its own content.
+
+    Returns {"ok": bool, "checks": [{"name", "ok", "detail"}, ...]}. The caller
+    must treat any failed check as fail-closed.
+    """
+    checks: list[dict[str, object]] = []
+
+    def _record(name: str, ok: bool, detail: str = "") -> None:
+        checks.append({"name": name, "ok": ok, "detail": detail})
+
+    try:
+        manifest = _read_json(import_manifest_path)
+        _require_keys(manifest, "source_type", "scenario", "assets")
+        if (
+            manifest["source_type"] != SOURCE_TYPE
+            or manifest["scenario"] != SCENARIO
+        ):
+            raise ValueError("manifest is not the controlled finance demo fixture")
+        manifest_assets = manifest["assets"]
+        if not isinstance(manifest_assets, list) or not manifest_assets:
+            raise ValueError("manifest declares no assets")
+        for entry in manifest_assets:
+            if (
+                not isinstance(entry, dict)
+                or set(entry) != {"relative_path", "material_key"}
+                or not isinstance(entry["relative_path"], str)
+                or not isinstance(entry["material_key"], str)
+            ):
+                raise ValueError("manifest asset declaration is invalid")
+        _record("manifest", True)
+    except Exception as error:
+        _record("manifest", False, str(error))
+        manifest_assets = []
+
+    try:
+        integrity = _read_json(integrity_path)
+        _require_keys(integrity, "source_type", "scenario", "assets")
+        if (
+            integrity["source_type"] != SOURCE_TYPE
+            or integrity["scenario"] != SCENARIO
+        ):
+            raise ValueError("integrity declaration is not for the finance demo fixture")
+        declared_assets = integrity["assets"]
+        if not isinstance(declared_assets, list) or not declared_assets:
+            raise ValueError("integrity declaration lists no assets")
+        for entry in declared_assets:
+            if (
+                not isinstance(entry, dict)
+                or set(entry) != {"relative_path", "sha256"}
+                or not isinstance(entry["relative_path"], str)
+            ):
+                raise ValueError("integrity asset declaration is invalid")
+            _require_sha256_hex(entry["sha256"])
+        _record("integrity", True)
+    except Exception as error:
+        _record("integrity", False, str(error))
+        declared_assets = []
+
+    if declared_assets and manifest_assets:
+        declared_paths = {entry["relative_path"] for entry in declared_assets}
+        manifest_paths = {entry["relative_path"] for entry in manifest_assets}
+        sets_match = declared_paths == manifest_paths
+        _record(
+            "declared-set",
+            sets_match,
+            "manifest and integrity declare different file sets" if not sets_match else "",
+        )
+
+    for entry in declared_assets:
+        relative_path = entry["relative_path"]
+        expected_digest = entry["sha256"]
+        try:
+            source_path = _declared_source_path(source_root, relative_path)
+            actual_digest = _sha256_hex(source_path)
+            matched = hmac.compare_digest(actual_digest, expected_digest)
+            detail = (
+                ""
+                if matched
+                else f"expected {expected_digest}, actual {actual_digest}"
+            )
+            _record(f"file:{relative_path}", matched, detail)
+        except Exception as error:
+            _record(f"file:{relative_path}", False, str(error))
+
+    try:
+        rules = _read_json(rules_path)
+        _require_keys(
+            rules, "source_type", "scenario", "version_label", "content_fingerprint"
+        )
+        if (
+            rules["source_type"] != SOURCE_TYPE
+            or rules["scenario"] != SCENARIO
+            or rules["version_label"] != VERSION_LABEL
+        ):
+            raise ValueError("rules fixture is not the controlled finance demo ruleset")
+        fixture_fingerprint = rules["content_fingerprint"]
+        _require_sha256_fingerprint(fixture_fingerprint)
+        matched = fixture_fingerprint == _canonical_rules_fingerprint(rules)
+        _record(
+            "rules",
+            matched,
+            "content_fingerprint does not match rules content" if not matched else "",
+        )
+    except Exception as error:
+        _record("rules", False, str(error))
+
+    return {"ok": all(bool(check["ok"]) for check in checks), "checks": checks}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -218,12 +363,24 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="seed the demo state, print a summary and exit without serving",
     )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="run a read-only demo fixture integrity self-check and exit (0 = ok, 1 = failed)",
+    )
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     args = parser.parse_args(argv)
 
+    if args.verify:
+        result = verify_demo_fixture_integrity()
+        print("fixture integrity: " + json.dumps(result, ensure_ascii=False))
+        return 0 if result["ok"] else 1
+
     repository = InMemoryControlPlaneRepository()
-    summary = seed_financial_preassessment_demo(repository)
+    summary = seed_financial_preassessment_demo(
+        repository, integrity_path=INTEGRITY_PATH
+    )
     print("demo seed summary: " + json.dumps(summary, ensure_ascii=False))
     if args.seed_only:
         print("demo login: alice / demo-a-password (wired when serving /demo)")
@@ -306,6 +463,19 @@ def _require_sha256_fingerprint(content_fingerprint: object) -> None:
         or any(character not in "0123456789abcdef" for character in digest)
     ):
         raise ValueError("finance demo fingerprint must be a sha256 digest")
+
+
+def _require_sha256_hex(digest: object) -> None:
+    if (
+        not isinstance(digest, str)
+        or len(digest) != 64
+        or any(character not in "0123456789abcdef" for character in digest)
+    ):
+        raise ValueError("finance demo integrity digest must be a 64-char sha256 hex")
+
+
+def _sha256_hex(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _canonical_rules_fingerprint(rules: dict[str, object]) -> str:

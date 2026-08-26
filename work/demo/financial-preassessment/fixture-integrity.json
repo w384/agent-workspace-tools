@@ -1,0 +1,31 @@
+{
+  "source_type": "demo_fixture",
+  "scenario": "finance_profile_matching",
+  "version_label": "demo-2026-08-14",
+  "assets": [
+    {
+      "relative_path": "客户模拟资料/资料概览与授权说明.docx",
+      "sha256": "280a6c6b48041eaacf59b8d80f0c61fd92298b4e951d51a0c647a97e29c6ce39"
+    },
+    {
+      "relative_path": "客户模拟资料/收入情况说明.pdf",
+      "sha256": "87363257b8d915c04613752922c5863b2d8d04cbad95efde721c3151b378de72"
+    },
+    {
+      "relative_path": "客户模拟资料/资金流摘要.pdf",
+      "sha256": "a3f5bce6e933a313f3e63f0065f0b1a09dff347c0b8f497d99b65877e33f6d57"
+    },
+    {
+      "relative_path": "客户模拟资料/资产负债说明.docx",
+      "sha256": "0f7de882136d4815e03c16d47f544ed6cc95e13d4d93b6faf9db475a55eeb383"
+    },
+    {
+      "relative_path": "客户模拟资料/经营情况说明.docx",
+      "sha256": "a0fcda21512b230e08997f98ef53f983808721686b4b910edaa2b9277410a2d3"
+    },
+    {
+      "relative_path": "客户模拟资料/补充材料清单.pdf",
+      "sha256": "bb5a03c7c20431bb0f30d6891c7ca61658419e639347b06b745c7078681a390a"
+    }
+  ]
+}
