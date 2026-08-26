@@ -141,6 +141,21 @@ git diff --check
 - 提交（main，未推送 origin）：5227ed3 feat(control_plane): 真实上传自动建库（SHA-256 指纹 + PDF/DOCX 解析 + 向量索引 + 授权绑定）（8 files +823/-17，含新增 test_knowledge_upload_bridge.py）。
 - 红线：未 push origin、未建分支、main 直链保持。
 
+## 实际结果（2026-08-26 实测 · v3 控制面能力增强：TRASH 读回验证 + 审批 422 闭环）
+
+背景：Q 授权自主优化 4 小时（不 push origin、不建分支）。本轮补齐「破坏性操作读回验证」与「审批通过后验证失败」两个能力闭环，完善 Agent Action Gateway 的「可验证执行」叙事。
+
+- TRASH 读回验证（verification.py 新增 TRASH 分支，TDD RED→GREEN）：
+  - 此前 TRASH（高风险破坏性操作，政策层 APPROVAL_REQUIRED）在 verifier 中落入 UNKNOWN（无法读回），破坏性操作反而无法独立验证。
+  - 现在：执行后独立读回源文件存在性——源文件已从受控目录消失 → VERIFIED；仍存在（执行器谎报「已删除」）→ MISMATCH（reason=trash_readback_failed），阻断伪删除并进入恢复闭环。
+  - 新增 test_trash_verification.py（2 项）：真实删除 executor → VERIFIED（job/plan=verified + 审计 execution_verified）；谎报不删 → MISMATCH + VerificationMismatchError + recovery_task。
+- 审批通过后验证失败 HTTP 422 闭环（test_recovery_approval_http.py，1 项）：
+  - 此前 confirm_plan 的 422 verification_failed 已有 HTTP 测试，但 decide_approval（高风险操作经审批通过后执行）路径无 HTTP 测试。
+  - 新增：TRASH 计划 → 创建/确认/审批通过（bob 审批人）→ 执行 → 读回失败 → 422 verification_failed + pending recovery_task（reason=trash_readback_failed、strategy=retry_compensation）+ 审计（approval_approved + execution_verification_failed + recovery_task_created）。
+- 集成回归（提权，新鲜原始输出）：control_plane/tests 全量 141 passed in 3.26s；RAG LLM 20 passed in 0.08s；service/tests/rag 72 passed in 0.28s；git diff --check exit 0。
+- 提交（main，未推送 origin）：2923265 feat(control_plane): TRASH 读回验证——破坏性操作落入 VERIFIED/MISMATCH 闭环；b4a2b4c test(control_plane): 审批通过后验证失败的 HTTP 422 闭环测试。
+- 红线：未 push origin、未建分支、main 直链保持。
+
 ## 关键断言
 
 路径 B（LLM 知识库问答）：
