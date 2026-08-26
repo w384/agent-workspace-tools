@@ -13,6 +13,7 @@ from .domain import (
     ExecutionJob,
     PermissionGrant,
     Plan,
+    RecoveryTask,
     RuleSet,
     RuleVersion,
     TrustedActorContext,
@@ -86,6 +87,14 @@ class ControlPlaneRepository(Protocol):
         self, plan_id: str, plan_hash: str, idempotency_key: str
     ) -> ExecutionJob | None: ...
 
+    def create_recovery_task(self, task: RecoveryTask) -> RecoveryTask: ...
+
+    def get_recovery_task(self, recovery_id: str) -> RecoveryTask: ...
+
+    def update_recovery_task(self, task: RecoveryTask) -> RecoveryTask: ...
+
+    def list_recovery_tasks(self, workspace_id: str) -> list[RecoveryTask]: ...
+
     def create_rule_set(self, rule_set: RuleSet) -> RuleSet: ...
 
     def get_rule_set(self, rule_set_id: str) -> RuleSet: ...
@@ -108,6 +117,7 @@ class InMemoryControlPlaneRepository:
         self.confirmations: dict[str, Confirmation] = {}
         self.approvals: dict[str, Approval] = {}
         self.execution_jobs: dict[str, ExecutionJob] = {}
+        self.recovery_tasks: dict[str, RecoveryTask] = {}
         self.rule_sets: dict[str, RuleSet] = {}
         self.rule_versions: dict[str, RuleVersion] = {}
         self.assessment_reports: dict[str, AssessmentReport] = {}
@@ -349,6 +359,24 @@ class InMemoryControlPlaneRepository:
             ):
                 return job
         return None
+
+    def create_recovery_task(self, task: RecoveryTask) -> RecoveryTask:
+        self.recovery_tasks[task.recovery_id] = task
+        return task
+
+    def get_recovery_task(self, recovery_id: str) -> RecoveryTask:
+        return self.recovery_tasks[recovery_id]
+
+    def update_recovery_task(self, task: RecoveryTask) -> RecoveryTask:
+        self.recovery_tasks[task.recovery_id] = task
+        return task
+
+    def list_recovery_tasks(self, workspace_id: str) -> list[RecoveryTask]:
+        return [
+            task
+            for task in self.recovery_tasks.values()
+            if task.workspace_id == workspace_id
+        ]
 
     def create_rule_set(self, rule_set: RuleSet) -> RuleSet:
         self.rule_sets[rule_set.rule_set_id] = rule_set

@@ -551,3 +551,56 @@ def client_as_a(client: AsgiClient) -> AsgiClient:
     )
     assert response.status_code == 200
     return client
+
+
+# ---------------------------------------------------------------------------
+# 沙箱兼容的临时目录（覆盖 pytest 内置 tmp_path / tmp_path_factory）
+#
+# 沙箱环境实测：os.mkdir(path, 0o700) 创建出的目录，当前用户既不能写入也
+# 不能枚举；而 pytest 内置 tmp_path 恰好在 getbasetemp()/make_numbered_dir()
+# 中用 mode=0o700 建目录，导致 PermissionError（WinError 5）。
+# 这里改为默认 mode（0o777）建目录，根目录放 work/.pytest-tmp
+# （已被 .gitignore 忽略，不污染仓库）；默认不使用时可另设 AWT_PYTEST_TMPROOT。
+# ---------------------------------------------------------------------------
+import os as _os
+import shutil as _shutil
+import uuid as _uuid
+
+
+_TMP_ROOT: Path | None = None
+
+
+def _pytest_tmp_root() -> Path:
+    global _TMP_ROOT
+    if _TMP_ROOT is None:
+        env_root = _os.environ.get("AWT_PYTEST_TMPROOT")
+        root = (
+            Path(env_root)
+            if env_root
+            else Path(__file__).resolve().parents[2] / "work" / ".pytest-tmp"
+        )
+        root.mkdir(parents=True, exist_ok=True)
+        _TMP_ROOT = root
+    return _TMP_ROOT
+
+
+class _SandboxTempPathFactory:
+    def mktemp(self, basename: str = "tmp", numbered: bool = True) -> Path:
+        directory = _pytest_tmp_root() / f"{basename}-{_uuid.uuid4().hex[:12]}"
+        directory.mkdir()
+        return directory
+
+    def getbasetemp(self) -> Path:
+        return _pytest_tmp_root()
+
+
+@pytest.fixture(scope="session")
+def tmp_path_factory() -> _SandboxTempPathFactory:
+    return _SandboxTempPathFactory()
+
+
+@pytest.fixture
+def tmp_path(tmp_path_factory) -> Path:
+    directory = tmp_path_factory.mktemp("tmp")
+    yield directory
+    _shutil.rmtree(directory, ignore_errors=True)

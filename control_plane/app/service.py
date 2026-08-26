@@ -15,6 +15,7 @@ from .domain import (
     DecisionState,
     ExecutionJob,
     Plan,
+    RecoveryTask,
     RuleSet,
     RuleVersion,
     TrustedActorContext,
@@ -105,6 +106,13 @@ class ExecutorExecutionFailedError(Exception):
 class VerificationMismatchError(Exception):
     pass
 
+class RecoveryTaskNotFoundError(Exception):
+    pass
+
+
+class RecoveryTaskStateError(Exception):
+    pass
+
 
 class RuleSourceNotAllowedError(Exception):
     pass
@@ -135,6 +143,12 @@ class PlanOutcome:
     decision: AuthorizationDecision
     plan: Plan
     impact_summary: str
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveryOutcome:
+    task: RecoveryTask
+    plan: Plan
 
 
 @dataclass(frozen=True, slots=True)
@@ -861,6 +875,54 @@ class ControlPlaneService:
         job = self._execute_plan(actor, plan, idempotency_key, confirmation, updated_approval)
         return ApprovalOutcome(updated_approval, job)
 
+    def list_recovery_tasks(self, actor: TrustedActorContext) -> list[RecoveryTask]:
+        return self._repository.list_recovery_tasks(actor.workspace_id)
+
+    def resolve_recovery_task(
+        self,
+        actor: TrustedActorContext,
+        recovery_id: str,
+        decision: str,
+    ) -> RecoveryOutcome:
+        try:
+            task = self._repository.get_recovery_task(recovery_id)
+        except KeyError as error:
+            raise RecoveryTaskNotFoundError from error
+        if task.workspace_id != actor.workspace_id:
+            raise RecoveryTaskNotFoundError
+        if task.state != "pending":
+            raise RecoveryTaskStateError
+        if decision not in {"recovered", "escalated"}:
+            raise RecoveryTaskStateError
+        next_state = "recovered" if decision == "recovered" else "escalated"
+        plan = self._get_plan(task.plan_id)
+        updated = self._repository.update_recovery_task(
+            replace(
+                task,
+                state=next_state,
+                resolved_by=actor.actor_id,
+                resolved_at=_utc_now(),
+            )
+        )
+        self._repository.update_plan(replace(plan, state=next_state))
+        self._repository.append_audit_event(
+            _audit_event(
+                event_type=(
+                    "recovery_resolved" if decision == "recovered" else "recovery_escalated"
+                ),
+                actor_id=actor.actor_id,
+                request_id=actor.request_id,
+                run_id=actor.run_id,
+                details={
+                    "recovery_id": task.recovery_id,
+                    "plan_id": task.plan_id,
+                    "job_id": task.job_id,
+                    "decision": decision,
+                },
+            )
+        )
+        return RecoveryOutcome(updated, self._repository.get_plan(task.plan_id))
+
     def _get_plan(self, plan_id: str) -> Plan:
         try:
             return self._repository.get_plan(plan_id)
@@ -1063,7 +1125,56 @@ class ControlPlaneService:
                 details=details,
             )
         )
+        self._create_recovery_task(actor, plan, recorded, verification)
         return recorded
+
+    def _create_recovery_task(
+        self,
+        actor: TrustedActorContext,
+        plan: Plan,
+        job: ExecutionJob,
+        verification: VerificationResult,
+    ) -> RecoveryTask:
+        strategy = {
+            VerificationStatus.MISMATCH: "retry_compensation",
+            VerificationStatus.UNKNOWN: "manual_review",
+            VerificationStatus.NEEDS_RECOVERY: "auto_compensation",
+            VerificationStatus.ESCALATED: "escalate",
+        }.get(verification.status, "manual_review")
+        recovery = self._repository.create_recovery_task(
+            RecoveryTask(
+                recovery_id=str(uuid4()),
+                plan_id=plan.plan_id,
+                job_id=job.job_id,
+                workspace_id=plan.workspace_id,
+                state="pending",
+                strategy=strategy,
+                reason=verification.reason,
+                details={
+                    "verification_status": verification.status.value,
+                    "expected_state": verification.expected_state,
+                    "actual_state": verification.actual_state,
+                    "evidence": verification.evidence,
+                },
+                created_at=_utc_now(),
+            )
+        )
+        self._repository.append_audit_event(
+            _audit_event(
+                event_type="recovery_task_created",
+                actor_id=actor.actor_id,
+                request_id=actor.request_id,
+                run_id=actor.run_id,
+                details={
+                    "recovery_id": recovery.recovery_id,
+                    "plan_id": plan.plan_id,
+                    "job_id": job.job_id,
+                    "strategy": strategy,
+                    "reason": verification.reason,
+                },
+            )
+        )
+        return recovery
 
     def _execution_actor(
         self, caller_actor: TrustedActorContext, plan: Plan

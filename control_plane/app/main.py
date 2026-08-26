@@ -19,7 +19,7 @@ from .domain import (
     PrincipalType,
     TrustedActorContext,
 )
-from .ports import FileExecutorPort, RagPort
+from .ports import FileExecutorPort, RagPort, VerificationPort
 from .repository import ControlPlaneRepository
 from .service import (
     ActorNotPlanCreatorError,
@@ -152,6 +152,7 @@ def create_app(
     demo_identities: Mapping[str, DemoIdentity],
     internal_service_key: str,
     approver_role_id: str,
+    verification_port: VerificationPort | None = None,
     demo_rules_fixture_path: Path | None = None,
     llm_providers: object | None = None,
     disclaimer_version: str = "disclaimer-demo-v1",
@@ -202,6 +203,7 @@ def create_app(
         file_executor,
         rag_port,
         approver_role_id,
+        verification_port=verification_port,
         disclaimer_version=disclaimer_version,
         disclaimer_text=disclaimer_text,
     )

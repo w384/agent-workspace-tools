@@ -136,6 +136,21 @@ class ExecutionJob:
 
 
 @dataclass(frozen=True, slots=True)
+class RecoveryTask:
+    recovery_id: str
+    plan_id: str
+    job_id: str
+    workspace_id: str
+    state: str
+    strategy: str
+    reason: str
+    details: Mapping[str, object]
+    created_at: str
+    resolved_at: str | None = None
+    resolved_by: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RuleSet:
     rule_set_id: str
     scenario: str
