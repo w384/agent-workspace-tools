@@ -25,3 +25,9 @@ control_plane/work/sdd/
 .pytest-tmp*
 work/.pytest-tmp*
 
+
+# 探针/测试临时目录（受限 ACL，沙箱内无法删除）
+probe-*/
+work/probe-*/
+work/pytest-tmp-*/
+work/.pytest-verif/
