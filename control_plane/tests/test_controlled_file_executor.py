@@ -280,3 +280,11 @@ def test_demo_wiring_plan_loop_verified_via_http(
     assert (tmp_path / "organized" / "report-moved.txt").read_bytes() == (
         b"demo wiring content 2026"
     )
+    verified_events = [
+        event
+        for event in repository.list_audit_events()
+        if event.event_type == "execution_verified"
+    ]
+    assert len(verified_events) == 1
+    assert verified_events[0].details["verification_status"] == "verified"
+    assert repository.get_plan(plan["plan_id"]).state == "verified"
