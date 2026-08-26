@@ -24,6 +24,7 @@ control_plane/work/sdd/
 # 演示临时产物与受限 ACL 目录
 .pytest-tmp*
 work/.pytest-tmp*
+work/demo/financial-preassessment/controlled-actions/
 
 
 # 探针/测试临时目录（受限 ACL，沙箱内无法删除）

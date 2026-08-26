@@ -50,6 +50,7 @@ SOURCE_ROOT = DEMO_ROOT / "source"
 IMPORT_MANIFEST_PATH = DEMO_ROOT / "import-manifest.json"
 INTEGRITY_PATH = DEMO_ROOT / "fixture-integrity.json"
 RULES_PATH = DEMO_ROOT / "rules" / "demo-bank-rules-v1.json"
+CONTROLLED_ACTIONS_DIR = DEMO_ROOT / "controlled-actions"
 
 SCENARIO = "finance_profile_matching"
 SOURCE_TYPE = "demo_fixture"
@@ -402,11 +403,17 @@ def main(argv: list[str] | None = None) -> int:
         workspace_id=WORKSPACE_ID,
         providers=llm_providers,
     )
+    from control_plane.app.controlled_file_executor import ControlledFileExecutor
+    from control_plane.app.verification import ControlledDirectoryVerifier
+
+    controlled_actions_dir = CONTROLLED_ACTIONS_DIR
+    controlled_actions_dir.mkdir(parents=True, exist_ok=True)
     app = create_app(
         llm_providers=llm_providers,
         repository=repository,
-        file_executor=object(),
+        file_executor=ControlledFileExecutor(controlled_actions_dir),
         rag_port=rag_port,
+        verification_port=ControlledDirectoryVerifier(controlled_actions_dir),
         demo_identities={
             "alice": DemoIdentity(
                 username="alice",
@@ -434,7 +441,9 @@ def main(argv: list[str] | None = None) -> int:
     print(
         "serving /demo at http://"
         f"{args.host}:{args.port}  (logins: alice / demo-a-password, "
-        "bob / demo-b-password [no-query user])"
+        "bob / demo-b-password [no-query user]; "
+        "计划执行闭环已启用: controlled-actions="
+        f"{controlled_actions_dir})"
     )
     uvicorn.run(app, host=args.host, port=args.port)
     return 0
