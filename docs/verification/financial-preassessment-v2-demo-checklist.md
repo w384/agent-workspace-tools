@@ -188,6 +188,17 @@ git diff --check
 - 提交（main，未推送 origin）：1f88695 feat(control_plane): 演示服务接入真实受控目录执行器与读回验证（替代 file_executor=object()）（4 files +449/-2）。
 - 红线：未 push origin、未建分支、main 直链保持。
 
+## 实际结果（2026-08-26 实测 · v3 自主优化批次 D：接线测试审计断言 + runbook 计划执行闭环章节）
+
+背景：批次 C 落地真实受控目录执行器后，本批补齐两件事——①把「可验证执行」证据锁进接线测试（镜像 init main() 的 HTTP 闭环测试补审计断言）；②runbook 登记「控制面计划执行闭环」可选演示章节并修正过时边界声明。
+
+- 接线测试审计断言（test_controlled_file_executor.py::test_demo_wiring_plan_loop_verified_via_http 追加 3 断言）：确认后 repository 审计事件中存在 1 条 execution_verified（details.verification_status=verified），且 plan.state=verified——与正例测试（move_rename / trash）的审计口径一致。
+- runbook（docs/demo/financial-preassessment-demo-runbook.md）：新增「步骤 11：控制面计划执行闭环（Agent Action Gateway 可验证执行，可选演示）」——API 级演示（前端暂未提供计划操作 UI）：登录 alice → POST /api/uploads → POST /api/plans（move_rename，SELF_CONFIRM）→ POST /api/plans/{id}/confirm（Idempotency-Key）→ 读回 VERIFIED（execution_job/plan=verified + 审计 execution_verified + 受控根真实文件变化）；trash 走 APPROVAL_REQUIRED 需审批；负向分支（路径逃逸 PermissionError、验证失败 422 + recovery_task）由 test_trash_verification / test_recovery_approval_http 覆盖，不占主故事。
+- 边界声明修正：「真实 LLM 接入」由 P0 在途 → 已完成（提交 4d0c241，含 bob 越权演示身份）；「真实上传自动解析与索引」由 NOT_DONE → 已完成（提交 5227ed3）。
+- 集成回归（提权，新鲜原始输出）：control_plane/tests 全量 162 passed in 3.92s；RAG LLM（test_llm_answer_generator + test_llm_explanation_port）20 passed in 0.07s；service/tests/rag 72 passed in 0.28s；git diff --check exit 0（仅既有 LF 转 CRLF warning）。
+- 提交链（main，未推送 origin）：fff894c test(control_plane): 接线测试补审计断言——execution_verified 事件与 plan verified 状态 → cdd8e8f docs(demo): runbook 新增控制面计划执行闭环可选演示章节并修正过时边界声明。
+- 红线：未 push origin、未建分支、main 直链保持；工作区仅剩既有 work/.tmp-demo-serve.log* 与受限 ACL 目录残留（随批次处理，非本轮改动）。
+
 ## 关键断言
 
 路径 B（LLM 知识库问答）：
@@ -236,7 +247,7 @@ git diff --check
 
 ## 残余风险
 
-- 真实 LLM 接入（AnswerGenerator/ExplanationPort + BFF 桥接）：P0 在途，实施归 RAG 后台 + 控制面，执行总负责统筹验收与集成；演示期使用受控 demo LLM 凭证（脱敏），不落前端、不入库明文。
+- 真实 LLM 接入（AnswerGenerator/ExplanationPort + BFF 桥接）：✅ 已完成（4d0c241，路径 B 改接真实 LLM + bob 越权负向身份）；演示期使用受控 demo LLM 凭证（脱敏），不落前端、不入库明文。
 - 真实上传自动解析与索引：✅ 已完成（5227ed3，内存向量索引 + 真实 SHA-256 指纹 + 上传者自动授权；不落盘，仅演示级内存索引，非生产持久化向量库）。
 - Dify 页面实机解释与 Workflow 追踪：NOT_RUN。
 - Qdrant、真实 PostgreSQL、OS 级无网络/资源隔离 parser sandbox：NOT_DONE。
