@@ -12,7 +12,7 @@
 - **资料预评估**：确定性规则引擎按演示银行规则做资料匹配度预评估，输出 match_score、结果等级（MATCH / POSSIBLE / NOT_MATCH）、已满足条件、缺失材料与版本化引用，并附固定免责声明。
 - **已建库文件管理**：列出当前账号已上传并建库的真实材料文件；上传者可在演示前手动删除，以便下次复用同名文件重新演示。受控样例文件不受影响。
 - **登出重置**：Demo 阶段每次登出即清空本账号已上传 / 已建库文件与前端选中状态，重新登录从干净状态开始。
-- **控制面能力样板（API 层）**：在演示 UI 之外，工程同时落地 Agent 安全运行样板能力——身份与授权策略（Policy / Actor Context）、计划与审批（Plan / Approval / 幂等 / 计划哈希）、独立读回验证（Verification Adapter：VERIFIED / MISMATCH / UNKNOWN）、失败后的恢复与升级（Recovery Task：recovered / escalated + 审计事件）。完整闭环与验收口径见 docs/engineering-principles.md 与 docs/verification/。
+- **控制面能力样板（API 层）**：在演示 UI 之外，工程同时落地 Agent 安全运行样板能力——身份与授权策略（Policy / Actor Context）、计划与审批（Plan / Approval / 幂等 / 计划哈希）、独立读回验证（Verification Adapter：VERIFIED / MISMATCH / UNKNOWN）、失败后的恢复与升级（Recovery Task：recovered / escalated + 审计事件）、MCP 暴露层（Policy / Assess / Query / Audit 四工具，支持可选 agent_id 演示「Agent 代表用户执行」：Agent 继承所属用户授权、动作以 agent_action_executed 审计留痕、无 QUERY 授权用户的 Agent 同样被拒）。完整闭环与验收口径见 docs/engineering-principles.md 与 docs/verification/。
 
 ## 快速开始（本地）
 
@@ -75,7 +75,7 @@
     # RAG 检索服务（LLM 生成 / 解释端口 / 文档解析 / 权限感知检索等）
     python -m pytest service/tests/rag -q
 
-核心验收口径：RAG LLM 20 passed、控制面 141 passed、service/tests/rag 72 passed、git diff --check 通过。
+核心验收口径：RAG LLM 20 passed、控制面 156 passed、service/tests/rag 72 passed、git diff --check 通过。
 
 ## 免责声明
 

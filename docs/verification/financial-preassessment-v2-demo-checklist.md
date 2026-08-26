@@ -156,6 +156,23 @@ git diff --check
 - 提交（main，未推送 origin）：2923265 feat(control_plane): TRASH 读回验证——破坏性操作落入 VERIFIED/MISMATCH 闭环；b4a2b4c test(control_plane): 审批通过后验证失败的 HTTP 422 闭环测试。
 - 红线：未 push origin、未建分支、main 直链保持。
 
+## 实际结果（2026-08-26 实测 · v3 自主优化批次 A+B：可信启动完整性自检 + MCP Agent 身份）
+
+背景：Q 授权自主优化 4 小时（不 push origin、不建分支）。本轮补齐两个能力缺口并提交：
+
+- 批次 A · 可信启动完整性自检（fixture 离线 fail-closed 校验）：
+  - 新增 work/demo/financial-preassessment/fixture-integrity.json——6 个受控样例文件的 SHA-256 声明（键集合严格 {"relative_path","sha256"}，不触碰 import-manifest.json）。
+  - scripts/init_demo_financial_preassessment.py 新增 verify_demo_fixture_integrity()（manifest 结构 / integrity 结构 / 两声明文件集合一致 / 路径不逃逸 / 实际文件 SHA-256 比对 / 规则 content_fingerprint 自洽），seed 传 integrity_path 时先校验、失败 raise ValueError fail-closed；main() 新增 --verify 只读自检（exit 0/1）。
+  - 新增 control_plane/tests/test_fixture_integrity.py 8 项（正例、篡改指纹、缺失文件、路径逃逸、规则指纹不匹配、声明集合不一致、seed 成功、seed fail-closed）。
+  - 控制面全量：149 passed（141 + 8，提权）。
+- 批次 B · MCP 暴露层 Agent 身份（agent_id）：
+  - domain：TrustedActorContext / AuditEvent 增加可选 agent_id；mcp_server：authz_check / assess_materials / query_knowledge / list_audit_events 四工具支持可选 agent_id，Agent 继承所属用户授权（授权判定零改动），动作以 agent_action_executed 审计留痕（含越权拒绝同样留痕），无 agent_id 时不产生 agent 事件（不回归）。
+  - 新增 control_plane/tests/test_mcp_agent_identity.py 7 项（alice+agent 正例 ANSWERED / bob+agent 负例 DENIED 零 LLM 调用仍留痕 / authz_check 判定与所属用户一致 / assess MATCH 100 / list_audit_events 序列化 agent_id / 无 agent_id 不回归）。
+  - 控制面全量：156 passed（149 + 7，提权）。
+- 集成回归（提权，新鲜原始输出）：RAG LLM 20 passed in 0.08s；service/tests/rag 72 passed in 0.28s；git diff --check exit 0（仅既有 LF 转 CRLF warning）。
+- 提交链（main，未推送 origin）：9c839b9 feat(scripts): demo fixture 离线完整性自检（可信启动）；0873f39 feat(control_plane): MCP 暴露层支持 Agent 身份（agent_id）——继承用户授权、动作审计留痕、越权负向不变。
+- 红线：未 push origin、未建分支、main 直链保持；工作区仅剩既有 work/.tmp-demo-serve.log* 与受限 ACL 目录残留（随批次处理，非本轮改动）。
+
 ## 关键断言
 
 路径 B（LLM 知识库问答）：
