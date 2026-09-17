@@ -1,4 +1,4 @@
-"""LLM provider switching: local (Ollama) vs cloud (DeepSeek).
+"""LLM provider switching: local (llama.cpp) vs cloud (DeepSeek).
 
 Covers the BFF provider endpoints:
   1. GET /api/llm/provider returns the current provider and non-secret
@@ -78,7 +78,7 @@ def _grant_query(
 
 def _demo_environment() -> dict[str, str]:
     return {
-        "RAG_LLM_LOCAL_BASE_URL": "http://localhost:11462/v1",
+        "RAG_LLM_LOCAL_BASE_URL": "http://127.0.0.1:18080/v1",
         "RAG_LLM_LOCAL_MODEL": "qwen3.6:27b-q4_K_M",
         "RAG_LLM_BASE_URL": "https://api.deepseek.com/v1",
         "RAG_LLM_MODEL": "deepseek-chat",
@@ -172,9 +172,9 @@ def test_provider_response_never_leaks_credentials(
 
     assert "test-cloud-key" not in raw
     assert "api.deepseek.com" not in raw
-    assert "localhost:11462" not in raw
+    assert "127.0.0.1:18080" not in raw
     assert response.json()["providers"] == [
-        {"id": "local", "label": "本地模型（Ollama qwen3.6:27b-q4_K_M）"},
+        {"id": "local", "label": "本地模型（llama qwen3.6:27b-q4_K_M）"},
         {"id": "cloud", "label": "联网模型（DeepSeek）"},
     ]
 

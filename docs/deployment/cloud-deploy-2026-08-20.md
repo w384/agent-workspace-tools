@@ -5,8 +5,8 @@
 ## 0. 部署形态（Q 已定）
 
 - 云端：腾讯云国际站，直接通过 GitHub 仓库部署。
-- 不装 GPU、不装 Ollama；真实可用的模型只有 DeepSeek API。
-- 前端保留「本地模型 / 联网模型」两个按钮，本地按钮在云端无 Ollama 时不可用。
+- 不装 GPU、不装本地模型服务（llama.cpp / Ollama）；真实可用的模型只有 DeepSeek API。
+- 前端保留「本地模型 / 联网模型」两个按钮，本地按钮在云端无本地模型服务时不可用。
 - 来源仓库：<https://github.com/w384/agent-workspace-tools>（main，HEAD=52b9338，已推送同步）。
 
 ## 1. 服务器最低要求
@@ -45,7 +45,7 @@
 | `RAG_LLM_MODEL` | DeepSeek 模型名 | 默认 `deepseek-chat`，可不设 |
 | `RAG_LLM_API_KEY` | DeepSeek API Key | 推荐用环境变量注入；不设则前端登录后填写（登出即清空） |
 | `RAG_LLM_BASE_URL` | DeepSeek 端点 | 默认 `https://api.deepseek.com/v1`，可不设 |
-| `RAG_LLM_LOCAL_*` | Ollama 本地模型配置 | 云端不设（无 Ollama） |
+| `RAG_LLM_LOCAL_*` | 本地模型配置（llama.cpp / Ollama） | 云端不设（无本地模型服务） |
 
 Key 通过环境变量 / 密钥管理注入，不写入代码与仓库。
 

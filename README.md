@@ -8,7 +8,7 @@
 - **知识库问答**：两种提问来源——
   - 上传真实材料：选择本地 PDF / DOCX 上传并自动建库（内存向量索引），随后对自建库提问；
   - 受控样例文件：从系统内置的 import-manifest 白名单中选择虚构样例，直接提问。
-  - 问答模型可在「本地模型（Ollama）」与「联网模型（DeepSeek）」之间切换；联网模型支持在页面填写 API Key（登出即清空，不回写服务器）。
+  - 问答模型可在「本地模型（llama）」与「联网模型（DeepSeek）」之间切换；联网模型支持在页面填写 API Key（登出即清空，不回写服务器）。
 - **资料预评估**：确定性规则引擎按演示银行规则做资料匹配度预评估，输出 match_score、结果等级（MATCH / POSSIBLE / NOT_MATCH）、已满足条件、缺失材料与版本化引用，并附固定免责声明。
 - **已建库文件管理**：列出当前账号已上传并建库的真实材料文件；上传者可在演示前手动删除，以便下次复用同名文件重新演示。受控样例文件不受影响。
 - **登出重置**：Demo 阶段每次登出即清空本账号已上传 / 已建库文件与前端选中状态，重新登录从干净状态开始。
@@ -35,29 +35,29 @@
 
 ## LLM 模型配置
 
-「知识库问答」的生成模型可在**本地模型（Ollama）**与**联网模型（DeepSeek）**之间切换，默认本地模型。**新用户首次运行请按自己的环境配置，不要直接依赖代码内置的默认值。**
+「知识库问答」的生成模型可在**本地模型（llama.cpp / llama-server）**与**联网模型（DeepSeek）**之间切换，默认本地模型。**新用户首次运行请按自己的环境配置，不要直接依赖代码内置的默认值。**
 
 本地模型（默认）：
 
-- 默认端点 `http://localhost:11462/v1`（Ollama OpenAI 兼容端点）、默认模型 `qwen3.6:27b-q4_K_M`。
-- 若你的 Ollama 安装在不同地址 / 端口 / 模型（Ollama 标准默认端口是 11434），用环境变量覆盖：
-  - `RAG_LLM_LOCAL_BASE_URL`：本地 Ollama 端点（默认 `http://localhost:11462/v1`）
+- 默认端点 `http://127.0.0.1:18080/v1`（llama.cpp llama-server OpenAI 兼容端点）、默认模型 `qwen3.6:27b-q4_K_M`。
+- 若你的 llama-server 运行在不同地址 / 端口 / 模型，用环境变量覆盖：
+  - `RAG_LLM_LOCAL_BASE_URL`：本地 llama 端点（默认 `http://127.0.0.1:18080/v1`）
   - `RAG_LLM_LOCAL_MODEL`：本地模型名（默认 `qwen3.6:27b-q4_K_M`）
-  - `RAG_LLM_LOCAL_API_KEY`：本地端点所需 Key（Ollama 一般留空）
+  - `RAG_LLM_LOCAL_API_KEY`：本地端点所需 Key（llama-server 启用 `--api-key` 鉴权时必填，否则留空）
 
 联网模型（DeepSeek）：
 
 - 环境变量注入：`RAG_LLM_BASE_URL`（默认 `https://api.deepseek.com/v1`）、`RAG_LLM_MODEL`（默认 `deepseek-chat`）、`RAG_LLM_API_KEY`（必填）。
 - 或页面填写：在「知识库问答」页切到联网模型并填入 API Key，Key 仅当前会话 BFF 内存持有，登出即清空。
 
-安全约束：真实 Key / base_url / model 不落前端、不入审计。默认值源码位置：本地模型见 `control_plane/app/llm_providers.py`，RAG 注入见 `service/app/rag/llm.py`。云端部署（腾讯云国际站，无 GPU / 无 Ollama）只配置 DeepSeek 三项环境变量即可，本地模型按钮会提示未配置。
+安全约束：真实 Key / base_url / model 不落前端、不入审计。默认值源码位置：本地模型见 `control_plane/app/llm_providers.py`，RAG 注入见 `service/app/rag/llm.py`。云端部署（腾讯云国际站，无 GPU / 无本地模型服务）只配置 DeepSeek 三项环境变量即可，本地模型按钮会提示未配置。
 
 ## 云端部署（腾讯云国际站）
 
 部署形态与完整步骤见 [docs/deployment/cloud-deploy-2026-08-20.md](docs/deployment/cloud-deploy-2026-08-20.md)，要点：
 
 - 轻量应用服务器 / CVM，建议 2C4G 起步，Ubuntu 22.04 / Debian 12，Python 3.11+。
-- **不装 GPU、不装 Ollama**；真实可用模型只有 DeepSeek API，本地模型按钮在云端会提示未配置。
+- **不装 GPU、不装本地模型服务（llama.cpp / Ollama）**；真实可用模型只有 DeepSeek API，本地模型按钮在云端会提示未配置。
 - 启动时显式传 --host 0.0.0.0 才能从公网访问：
 
     python scripts/init_demo_financial_preassessment.py --host 0.0.0.0 --port 8891

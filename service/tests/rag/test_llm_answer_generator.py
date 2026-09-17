@@ -350,20 +350,20 @@ def test_llm_config_reads_injected_credentials():
     assert config.timeout_seconds == 7.0
 
 
-def test_llm_config_allows_empty_api_key_for_local_ollama():
-    """Local Ollama does not require an API key."""
+def test_llm_config_allows_empty_api_key_for_local_llama():
+    """Local llama endpoint does not require an API key (key optional)."""
     from service.app.rag.llm import load_llm_config
 
     config = load_llm_config(
         {
-            "RAG_LLM_BASE_URL": "http://localhost:11434/v1",
+            "RAG_LLM_BASE_URL": "http://127.0.0.1:18080/v1",
             "RAG_LLM_API_KEY": "",
-            "RAG_LLM_MODEL": "qwen3.5:9b",
+            "RAG_LLM_MODEL": "qwen3.6:27b-q4_K_M",
         }
     )
-    assert config.base_url == "http://localhost:11434/v1"
+    assert config.base_url == "http://127.0.0.1:18080/v1"
     assert config.api_key == ""
-    assert config.model == "qwen3.5:9b"
+    assert config.model == "qwen3.6:27b-q4_K_M"
 
 
 def test_build_answer_generator_uses_injected_credentials():
