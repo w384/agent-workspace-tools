@@ -3,7 +3,7 @@
 The demo exposes two runtime-switchable answer providers:
 
 - "local" (default): Ollama served via its OpenAI-compatible endpoint,
-  model qwen3.5:9b, no API key required.
+  model qwen3.6:27b-q4_K_M, no API key required.
 - "cloud": DeepSeek OpenAI-compatible endpoint. The API key is never
   exposed to the frontend, the BFF response, or the audit trail; it is
   injected only through the environment.
@@ -44,10 +44,10 @@ class ProviderSecrets:
 def _local_secrets(environment: Mapping[str, str]) -> ProviderSecrets:
     return ProviderSecrets(
         base_url=environment.get(
-            "RAG_LLM_LOCAL_BASE_URL", "http://localhost:11434/v1"
+            "RAG_LLM_LOCAL_BASE_URL", "http://localhost:11462/v1"
         ).strip(),
         api_key=environment.get("RAG_LLM_LOCAL_API_KEY", "").strip(),
-        model=environment.get("RAG_LLM_LOCAL_MODEL", "qwen3.5:9b").strip(),
+        model=environment.get("RAG_LLM_LOCAL_MODEL", "qwen3.6:27b-q4_K_M").strip(),
     )
 
 
@@ -87,8 +87,8 @@ class LLMProviderRegistry:
         return [
             ProviderDescriptor(
                 id=LOCAL_PROVIDER_ID,
-                label="本地模型（Ollama qwen3.5:9b）",
-                model="qwen3.5:9b",
+                label="本地模型（Ollama qwen3.6:27b-q4_K_M）",
+                model="qwen3.6:27b-q4_K_M",
             ),
             ProviderDescriptor(
                 id=CLOUD_PROVIDER_ID,

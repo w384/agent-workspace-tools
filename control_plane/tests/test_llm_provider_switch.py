@@ -78,8 +78,8 @@ def _grant_query(
 
 def _demo_environment() -> dict[str, str]:
     return {
-        "RAG_LLM_LOCAL_BASE_URL": "http://localhost:11434/v1",
-        "RAG_LLM_LOCAL_MODEL": "qwen3.5:9b",
+        "RAG_LLM_LOCAL_BASE_URL": "http://localhost:11462/v1",
+        "RAG_LLM_LOCAL_MODEL": "qwen3.6:27b-q4_K_M",
         "RAG_LLM_BASE_URL": "https://api.deepseek.com/v1",
         "RAG_LLM_MODEL": "deepseek-chat",
         "RAG_LLM_API_KEY": "test-cloud-key",
@@ -172,9 +172,9 @@ def test_provider_response_never_leaks_credentials(
 
     assert "test-cloud-key" not in raw
     assert "api.deepseek.com" not in raw
-    assert "localhost:11434" not in raw
+    assert "localhost:11462" not in raw
     assert response.json()["providers"] == [
-        {"id": "local", "label": "本地模型（Ollama qwen3.5:9b）"},
+        {"id": "local", "label": "本地模型（Ollama qwen3.6:27b-q4_K_M）"},
         {"id": "cloud", "label": "联网模型（DeepSeek）"},
     ]
 
