@@ -62,6 +62,7 @@ from service.app.rag.parser_worker import DOCX_MIME_TYPE, PDF_MIME_TYPE
 UPLOADED_DIR = "客户上传资料"
 MAX_KNOWLEDGE_UPLOAD_BYTES = 2 * 1024 * 1024
 ALLOWED_KNOWLEDGE_EXTENSIONS = frozenset({".pdf", ".docx"})
+MAX_KNOWLEDGE_QUERY_FILES = 6
 
 
 class LoginRequest(BaseModel):
@@ -98,6 +99,11 @@ class ControlledSampleQueryRequest(BaseModel):
 class KnowledgeQueryRequest(BaseModel):
     question: str
     file_name: str
+
+
+class KnowledgeQueryMultiRequest(BaseModel):
+    question: str
+    file_names: list[str]
 
 
 class KnowledgeFileDeleteRequest(BaseModel):
@@ -598,6 +604,63 @@ def create_app(
                 "Uploaded file not found",
             )
         return app.state.rag_port.query(actor, question, asset.asset_id)
+
+
+    @app.post("/api/demo/knowledge/query-multi")
+    def knowledge_query_multi(
+        request: KnowledgeQueryMultiRequest,
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> Mapping[str, object]:
+        """Query across several uploaded real-material files (all-or-nothing).
+
+        Every requested file must be an uploaded asset the actor is authorized
+        to query; if any is missing or unauthorized the whole query is DENIED
+        with zero recall / zero LLM calls (fail-closed).
+        """
+        question = request.question.strip()
+        if not question:
+            raise ApiError(422, "question_required", "Question is required")
+        names: list[str] = []
+        seen: set[str] = set()
+        for raw_name in request.file_names:
+            file_name = (raw_name or "").strip()
+            if not file_name:
+                continue
+            if not _is_safe_file_name(file_name):
+                raise ApiError(422, "invalid_file_name", "File name is not allowed")
+            if file_name in seen:
+                continue
+            seen.add(file_name)
+            names.append(file_name)
+        if not names:
+            raise ApiError(422, "file_names_required", "At least one file name is required")
+        if len(names) > MAX_KNOWLEDGE_QUERY_FILES:
+            raise ApiError(
+                422,
+                "too_many_files",
+                f"Querying more than {MAX_KNOWLEDGE_QUERY_FILES} files at once is not supported",
+            )
+        rag = app.state.rag_port
+        if not hasattr(rag, "query_multi"):
+            raise ApiError(
+                404,
+                "knowledge_query_multi_unavailable",
+                "Multi-file knowledge query bridge is not available",
+            )
+        repository = app.state.repository
+        asset_ids: list[str] = []
+        for file_name in names:
+            asset = repository.find_asset_by_path(
+                actor.workspace_id, f"{UPLOADED_DIR}/{file_name}"
+            )
+            if asset is None:
+                raise ApiError(
+                    404,
+                    "uploaded_file_not_found",
+                    f"Uploaded file not found: {file_name}",
+                )
+            asset_ids.append(asset.asset_id)
+        return rag.query_multi(actor, question, tuple(asset_ids))
 
 
     @app.get("/api/demo/knowledge/files")

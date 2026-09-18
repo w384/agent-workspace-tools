@@ -229,6 +229,14 @@ class FinanceDemoLlmRagPort:
     ) -> Mapping[str, object]:
         return self._query_port.query(actor, question, asset_id)
 
+    def query_multi(
+        self,
+        actor: TrustedActorContext,
+        question: str,
+        asset_ids: tuple[str, ...],
+    ) -> Mapping[str, object]:
+        return self._query_port.query_multi(actor, question, asset_ids)
+
     def assess_versions(
         self,
         actor: TrustedActorContext,

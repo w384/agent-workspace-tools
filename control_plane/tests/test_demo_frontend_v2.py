@@ -198,7 +198,7 @@ def test_demo_frontend_qa_model_name_and_target_bar(client) -> None:
     assert "currentModelLabel" in app_js
     assert '["模型", currentModelLabel]' in app_js
     # 409 文案拆分：本人上传 vs 可能其他账号（不再无条件承诺「可直接提问」）
-    assert "该文件本会话已上传过，已自动选中，可直接提问" in app_js
+    assert "该文件本会话已上传过，已自动勾选，可直接提问" in app_js
     assert "可能是其他账号上传，你未必有访问权限" in app_js
     # DENIED 卡片文案：主文案给结论，副文案给下一步
     assert "你没有访问该文件的权限" in app_js

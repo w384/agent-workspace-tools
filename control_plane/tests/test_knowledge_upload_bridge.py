@@ -279,6 +279,93 @@ def test_query_unknown_uploaded_file_not_found(
     assert response.json()["error"]["code"] == "uploaded_file_not_found"
 
 
+def test_uploader_query_multi_across_two_files_answered(
+    repository, demo_identities, monkeypatch
+) -> None:
+    client = _build_client(repository, monkeypatch, demo_identities)
+    _login(client, "alice", "demo-a-password")
+
+    first = _upload(client, _make_docx_bytes(), "海川智能-资料.docx").json()
+    second = _upload(
+        client,
+        _make_docx_bytes("宏图贸易主营电子元器件批发，2025 年回款稳定。"),
+        "宏图贸易-资料.docx",
+    ).json()
+
+    response = client.post(
+        "/api/demo/knowledge/query-multi",
+        json_body={
+            "question": "两家公司的主营业务分别是什么？",
+            "file_names": [first["file_name"], second["file_name"]],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ANSWERED"
+    assert payload["answer"] == "LLM 依据授权证据生成的回答"
+    assert payload["llm_invoked"] is True
+    assert payload["retrieved_count"] >= 1
+    assert payload["citations"]
+    citation_assets = {item["asset_id"] for item in payload["citations"]}
+    assert first["asset_id"] in citation_assets
+    assert second["asset_id"] in citation_assets
+    assert len(RecordingHttpxClient.requests) == 1
+
+
+def test_query_multi_fail_closed_when_any_file_unauthorized(
+    repository, demo_identities, monkeypatch
+) -> None:
+    client = _build_client(repository, monkeypatch, demo_identities)
+    _login(client, "alice", "demo-a-password")
+    alice_file = _upload(client, _make_docx_bytes(), "海川智能-资料.docx").json()
+
+    _login(client, "bob", "demo-b-password")
+    bob_file = _upload(
+        client,
+        _make_docx_bytes("宏图贸易主营电子元器件批发。"),
+        "宏图贸易-资料.docx",
+    ).json()
+
+    response = client.post(
+        "/api/demo/knowledge/query-multi",
+        json_body={
+            "question": "主营业务是什么？",
+            "file_names": [alice_file["file_name"], bob_file["file_name"]],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "DENIED"
+    assert payload["answer"] is None
+    assert payload["llm_invoked"] is False
+    assert payload["retrieved_count"] == 0
+    assert payload["citations"] == []
+    assert RecordingHttpxClient.requests == []
+
+
+def test_query_multi_input_guards(
+    repository, demo_identities, monkeypatch
+) -> None:
+    client = _build_client(repository, monkeypatch, demo_identities)
+    _login(client, "alice", "demo-a-password")
+
+    empty = client.post(
+        "/api/demo/knowledge/query-multi",
+        json_body={"question": "问题", "file_names": []},
+    )
+    assert empty.status_code == 422
+    assert empty.json()["error"]["code"] == "file_names_required"
+
+    missing = client.post(
+        "/api/demo/knowledge/query-multi",
+        json_body={"question": "问题", "file_names": ["从未上传过的文件.pdf"]},
+    )
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "uploaded_file_not_found"
+
+
 def test_upload_audit_never_retains_content_or_credentials(
     repository, demo_identities, monkeypatch
 ) -> None:

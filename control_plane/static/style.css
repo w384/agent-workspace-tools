@@ -546,3 +546,17 @@ button[type="submit"]:hover {
   margin-left: 4px;
 }
 
+.uploaded-file-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.uploaded-file-check {
+  flex-shrink: 0;
+  accent-color: var(--accent-dark);
+}
+

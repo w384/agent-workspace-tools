@@ -26,6 +26,8 @@
   let qaOwnUploaded = [];
   // 当前问答选中的文件：{ name, kind: "uploaded" | "controlled" }
   let qaSelectedFile = null;
+  // 已勾选的多文件问答目标（上传材料）：支持跨多个文件一次提问
+  let qaCheckedUploaded = new Set();
 
   function setStatus(message) {
     $("#login-status").textContent = message;
@@ -294,6 +296,13 @@
   function updateQaCurrentTarget() {
     const target = $("#qa-current-target");
     if (!target) return;
+    if (qaCheckedUploaded.size > 0) {
+      target.className = "file-status file-status-ok";
+      target.textContent =
+        "将同时提问 " + qaCheckedUploaded.size + " 个已上传文件：" +
+        Array.from(qaCheckedUploaded).join("、");
+      return;
+    }
     if (qaSelectedFile) {
       const source = qaSelectedFile.kind === "uploaded" ? "已上传材料" : "受控样例";
       target.className = "file-status file-status-ok";
@@ -368,6 +377,7 @@
     qaUploadedFiles = [];
     qaOwnUploaded = [];
     qaSelectedFile = null;
+    qaCheckedUploaded = new Set();
     updateQaCurrentTarget();
     const wrap = $("#qa-uploaded-list");
     if (wrap) wrap.classList.add("hidden");
@@ -383,12 +393,15 @@
   }
 
   // 已建库文件管理：加载当前 workspace 已上传并建库的真实材料文件
+  let knowledgeFiles = [];
+
   async function loadKnowledgeFiles() {
     try {
       const payload = await jsonRequest("/api/demo/knowledge/files", {
         method: "GET",
       });
-      renderKnowledgeFiles(payload.files || []);
+      knowledgeFiles = payload.files || [];
+      renderKnowledgeFiles(knowledgeFiles);
     } catch (error) {
       const list = $("#knowledge-file-list");
       if (list) {
@@ -436,25 +449,19 @@
       await jsonRequest("/api/demo/knowledge/files/delete", {
         body: { file_name: name },
       });
-      // 若删除的正是当前选中的上传文件，清空选择
+      // 若删除的正是当前勾选的上传文件，从多选集合移除
+      qaCheckedUploaded.delete(name);
       if (
         qaSelectedFile &&
         qaSelectedFile.kind === "uploaded" &&
         qaSelectedFile.name === name
       ) {
         qaSelectedFile = null;
-        updateQaCurrentTarget();
-        const hiddenField = $('[name="file_name"]');
-        if (hiddenField) hiddenField.value = "";
-        const status = $("#qa-upload-status");
-        if (status) {
-          status.className = "file-status";
-          status.textContent = "未上传文件。";
-        }
       }
       qaUploadedFiles = qaUploadedFiles.filter((item) => item !== name);
       qaOwnUploaded = qaOwnUploaded.filter((item) => item !== name);
       renderUploadedFiles();
+      updateQaCurrentTarget();
       await loadKnowledgeFiles();
     } catch (error) {
       if (list) {
@@ -468,6 +475,66 @@
   function resetKnowledgeFiles() {
     const list = $("#knowledge-file-list");
     if (list) list.replaceChildren();
+    knowledgeFiles = [];
+  }
+
+  async function overwriteKnowledgeFile() {
+    const picker = $("#knowledge-overwrite-picker");
+    const status = $("#knowledge-overwrite-status");
+    const file = picker && picker.files && picker.files[0];
+    if (!file) {
+      if (status) {
+        status.className = "file-status file-status-error";
+        status.textContent = "请先选择要覆盖上传的 PDF/DOCX 文件。";
+      }
+      return;
+    }
+    const existing = (knowledgeFiles || []).find((item) => item.name === file.name);
+    if (existing && !existing.can_delete) {
+      if (status) {
+        status.className = "file-status file-status-error";
+        status.textContent = "「" + file.name + "」由其他账号上传，你无权覆盖。";
+      }
+      return;
+    }
+    if (status) {
+      status.className = "file-status";
+      status.textContent = "正在覆盖上传并重新建库…";
+    }
+    try {
+      if (existing) {
+        await jsonRequest("/api/demo/knowledge/files/delete", {
+          body: { file_name: file.name },
+        });
+        qaCheckedUploaded.delete(file.name);
+        qaUploadedFiles = qaUploadedFiles.filter((item) => item !== file.name);
+        qaOwnUploaded = qaOwnUploaded.filter((item) => item !== file.name);
+      }
+      const formData = new FormData();
+      formData.append("file", file);
+      const payload = await multipartRequest("/api/demo/knowledge/upload", formData);
+      if (!qaUploadedFiles.includes(payload.file_name)) {
+        qaUploadedFiles.push(payload.file_name);
+      }
+      if (!qaOwnUploaded.includes(payload.file_name)) {
+        qaOwnUploaded.push(payload.file_name);
+      }
+      renderUploadedFiles();
+      qaCheckedUploaded.add(payload.file_name);
+      qaSelectedFile = null;
+      updateQaCurrentTarget();
+      picker.value = "";
+      if (status) {
+        status.className = "file-status file-status-ok";
+        status.textContent = "已覆盖上传并建库：" + payload.file_name;
+      }
+      await loadKnowledgeFiles();
+    } catch (error) {
+      if (status) {
+        status.className = "file-status file-status-error";
+        status.textContent = "覆盖上传失败：" + error.message;
+      }
+    }
   }
 
   function renderUploadedFiles() {
@@ -477,32 +544,42 @@
     list.replaceChildren();
     qaUploadedFiles.forEach((name) => {
       const item = el("li", "uploaded-file");
-      const btn = el("button", "uploaded-file-btn", name);
-      btn.type = "button";
-      btn.addEventListener("click", () => selectUploadedFile(name));
-      item.appendChild(btn);
+      const label = el("label", "uploaded-file-label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "uploaded-file-check";
+      checkbox.checked = qaCheckedUploaded.has(name);
+      checkbox.addEventListener("change", () => toggleUploadedFile(name, checkbox.checked));
+      label.appendChild(checkbox);
+      label.appendChild(document.createTextNode(name));
+      item.appendChild(label);
       list.appendChild(item);
     });
     wrap.classList.toggle("hidden", qaUploadedFiles.length === 0);
   }
 
-  function selectUploadedFile(name) {
-    qaSelectedFile = { name: name, kind: "uploaded" };
-    const hiddenField = $('[name="file_name"]');
-    if (hiddenField) hiddenField.value = "";
+  function toggleUploadedFile(name, checked) {
+    if (checked) {
+      qaCheckedUploaded.add(name);
+      // 勾选上传文件后，受控样例选择不再是提问目标
+      qaSelectedFile = null;
+      const hiddenField = $('[name="file_name"]');
+      if (hiddenField) hiddenField.value = "";
+      const qaStatus = $("#qa-file-picker-status");
+      if (qaStatus) {
+        qaStatus.className = "file-status";
+        qaStatus.textContent = "未选择文件。";
+      }
+    } else {
+      qaCheckedUploaded.delete(name);
+    }
     const status = $("#qa-upload-status");
     if (status) {
       status.className = "file-status file-status-ok";
-      status.textContent = "已选择：" + name + "。点击「提问」开始检索。";
+      status.textContent = qaCheckedUploaded.size
+        ? "已勾选 " + qaCheckedUploaded.size + " 个文件，点击「提问」跨文件检索。"
+        : "已取消全部勾选；可重新勾选或选择受控样例。";
     }
-    const qaStatus = $("#qa-file-picker-status");
-    if (qaStatus) {
-      qaStatus.className = "file-status";
-      qaStatus.textContent = "未选择文件。";
-    }
-    document.querySelectorAll(".uploaded-file-btn").forEach((btn) => {
-      btn.classList.toggle("active", btn.textContent === name);
-    });
     updateQaCurrentTarget();
   }
 
@@ -532,12 +609,14 @@
         qaOwnUploaded.push(payload.file_name);
       }
       renderUploadedFiles();
-      selectUploadedFile(payload.file_name);
+      qaCheckedUploaded.add(payload.file_name);
+      qaSelectedFile = null;
+      updateQaCurrentTarget();
       if (picker) picker.value = "";
       if (status) {
         status.className = "file-status file-status-ok";
         status.textContent =
-          "已上传并建库：" + payload.file_name + "（已自动选择，可直接提问）";
+          "已上传并建库：" + payload.file_name + "（已自动勾选，可直接提问）";
       }
       await loadKnowledgeFiles();
     } catch (error) {
@@ -553,11 +632,13 @@
             qaUploadedFiles.push(file.name);
           }
           renderUploadedFiles();
-          selectUploadedFile(file.name);
+          qaCheckedUploaded.add(file.name);
+          qaSelectedFile = null;
+          updateQaCurrentTarget();
           status.className = "file-status file-status-ok";
           status.textContent = ownUpload
-            ? "该文件本会话已上传过，已自动选中，可直接提问：" + file.name
-            : "该文件已存在，可能是其他账号上传，你未必有访问权限。已为你选中，点「提问」验证：" + file.name;
+            ? "该文件本会话已上传过，已自动勾选，可直接提问：" + file.name
+            : "该文件已存在，可能是其他账号上传，你未必有访问权限。已为你勾选，点「提问」验证：" + file.name;
         } else {
           status.className = "file-status file-status-error";
           status.textContent = "上传失败：" + error.message;
@@ -685,28 +766,38 @@
     const controlledNames = hiddenFile && hiddenFile.value
       ? hiddenFile.value.split(",").filter(Boolean)
       : collectControlledFileNames($("#qa-file-picker"));
-    let targetFile = null;
-    if (qaSelectedFile && qaSelectedFile.kind === "uploaded") {
-      targetFile = qaSelectedFile.name;
-    } else if (controlledNames.length) {
-      targetFile = controlledNames[0];
-      qaSelectedFile = { name: targetFile, kind: "controlled" };
-    }
-    if (!targetFile) {
-      result.replaceChildren(
-        el("p", "report-error", "请先选择受控样例或上传真实材料后再提问。")
-      );
-      return;
+    const checkedUploaded = Array.from(qaCheckedUploaded);
+    let endpoint;
+    let body;
+    if (checkedUploaded.length > 0) {
+      // 多文件问答：跨所有已勾选的上传材料一次检索
+      endpoint = "/api/demo/knowledge/query-multi";
+      body = { question: question, file_names: checkedUploaded };
+    } else {
+      let targetFile = null;
+      if (qaSelectedFile && qaSelectedFile.kind === "uploaded") {
+        targetFile = qaSelectedFile.name;
+      } else if (controlledNames.length) {
+        targetFile = controlledNames[0];
+        qaSelectedFile = { name: targetFile, kind: "controlled" };
+      }
+      if (!targetFile) {
+        result.replaceChildren(
+          el("p", "report-error", "请先选择受控样例或勾选上传材料后再提问。")
+        );
+        return;
+      }
+      endpoint = qaSelectedFile.kind === "uploaded"
+        ? "/api/demo/knowledge/query"
+        : "/api/controlled-sample/query";
+      body = { question: question, file_name: targetFile };
     }
     result.replaceChildren();
-    result.appendChild(el("p", "report-empty", "正在检索并生成回答…"));
-    const endpoint = qaSelectedFile.kind === "uploaded"
-      ? "/api/demo/knowledge/query"
-      : "/api/controlled-sample/query";
+    result.appendChild(
+      el("p", "report-empty", "正在跨文件检索并生成回答…")
+    );
     try {
-      const payload = await jsonRequest(endpoint, {
-        body: { question: question, file_name: targetFile },
-      });
+      const payload = await jsonRequest(endpoint, { body: body });
       renderQaResult(payload);
     } catch (error) {
       result.replaceChildren(
@@ -1163,6 +1254,10 @@
   }
   const qaUploadBtn = $("#qa-upload-btn");
   if (qaUploadBtn) qaUploadBtn.addEventListener("click", uploadRealMaterial);
+  const knowledgeOverwriteBtn = $("#knowledge-overwrite-btn");
+  if (knowledgeOverwriteBtn) {
+    knowledgeOverwriteBtn.addEventListener("click", overwriteKnowledgeFile);
+  }
   const planUploadBtn = $("#plan-upload-btn");
   if (planUploadBtn) planUploadBtn.addEventListener("click", planUpload);
   const planMoveBtn = $("#plan-move-btn");

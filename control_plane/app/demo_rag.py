@@ -71,8 +71,66 @@ class DemoRagPort:
             ),
             search_index=_AssetScopedSearchIndex(
                 self._search_index,
-                asset_id=asset.asset_id,
-                asset_version_id=asset.active_version_id,
+                scopes=frozenset({(asset.asset_id, asset.active_version_id)}),
+            ),
+            reranker=_IdentityReranker(),
+            answer_generator=self._answer_generator,
+            audit_sink=self,
+            minimum_evidence_score=self._minimum_evidence_score,
+        ).answer(
+            context=PermissionContext(
+                tenant_id=actor.workspace_id,
+                principal_id=actor.actor_id,
+                group_ids=tuple(sorted(actor.group_ids)),
+                session_id=actor.session_id,
+                request_id=actor.request_id,
+            ),
+            question=question,
+        )
+        return {
+            "status": result.status.value,
+            "answer": result.answer,
+            "reason": result.reason,
+            "retrieved_count": result.retrieved_count,
+            "llm_invoked": result.llm_invoked,
+            "citations": [
+                {
+                    **asdict(citation),
+                    "path_kind": citation.path_kind.value,
+                }
+                for citation in result.citations
+            ],
+        }
+
+    def query_multi(
+        self,
+        actor: TrustedActorContext,
+        question: str,
+        asset_ids: tuple[str, ...],
+    ) -> Mapping[str, object]:
+        """Query across several authorized uploaded assets (all-or-nothing).
+
+        Every requested asset must be authorized for the actor; if any is not,
+        the whole query is DENIED with zero recall and zero LLM calls
+        (fail-closed). The shared index is scoped to the union of the active
+        versions, so evidence may span all requested files in one LLM call.
+        """
+        scopes: set[tuple[str, str]] = set()
+        for asset_id in asset_ids:
+            asset = self._get_authorized_asset(actor, asset_id)
+            if asset is None:
+                return self._denied_payload(actor)
+            scopes.add((asset.asset_id, asset.active_version_id))
+        if self._answer_generator is None:
+            return self._llm_unavailable_payload(actor)
+        result = RetrievalService(
+            control_plane=ControlPlaneRetrievalAdapter(
+                repository=self._repository,
+                actor=actor,
+            ),
+            search_index=_AssetScopedSearchIndex(
+                self._search_index,
+                scopes=frozenset(scopes),
             ),
             reranker=_IdentityReranker(),
             answer_generator=self._answer_generator,
@@ -170,12 +228,20 @@ class _IdentityReranker:
 
 
 class _AssetScopedSearchIndex:
-    """Narrow a server-built filter to one control-plane authorized asset."""
+    """Narrow a server-built filter to authorized control-plane assets.
 
-    def __init__(self, search_index: object, *, asset_id: str, asset_version_id: str) -> None:
+    scopes is a set of (asset_id, asset_version_id) pairs; the single-asset
+    query passes a one-element set, the multi-asset query passes the union.
+    """
+
+    def __init__(
+        self,
+        search_index: object,
+        *,
+        scopes: frozenset[tuple[str, str]],
+    ) -> None:
         self._search_index = search_index
-        self._asset_id = asset_id
-        self._asset_version_id = asset_version_id
+        self._scopes = scopes
 
     def search(self, *, question: str, retrieval_filter: RetrievalFilter, limit: int):
         narrowed = RetrievalFilter(
@@ -183,8 +249,7 @@ class _AssetScopedSearchIndex:
             allowed_active_versions=tuple(
                 item
                 for item in retrieval_filter.allowed_active_versions
-                if item.asset_id == self._asset_id
-                and item.asset_version_id == self._asset_version_id
+                if (item.asset_id, item.asset_version_id) in self._scopes
             ),
             denied_asset_ids=retrieval_filter.denied_asset_ids,
         )

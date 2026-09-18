@@ -97,7 +97,7 @@
           <p>仅对当前会话授权可见的已激活版本做检索。</p>
           <div class="qa-hint" id="qa-hint">
             <strong>提问方式：</strong>本页支持两种提问方式，任选其一后点击「提问」——
-            ① 上传真实材料（自动建库，仅上传者可查）；② 选择受控样例文件。
+            ① 上传真实材料（自动建库，仅上传者可查），可勾选多个文件跨文件一次提问；② 选择受控样例文件。
           </div>
           <div class="model-switch" id="model-switch">
   <h3>问答模型</h3>
@@ -130,7 +130,7 @@
             </div>
             <p id="qa-upload-status" class="file-status">未上传文件。</p>
             <div id="qa-uploaded-list" class="uploaded-list hidden">
-              <h4>已上传材料（点击选择后提问）</h4>
+              <h4>已上传材料（勾选后可跨文件提问）</h4>
               <ul id="qa-uploaded-items"></ul>
             </div>
           </div>
@@ -160,6 +160,15 @@
           <h2>已建库文件管理</h2>
           <p>已上传并建库的真实材料文件列表；删除后可重新上传同名文件，便于下次演示。受控样例文件不受影响。</p>
           <div class="file-picker knowledge-manage" id="knowledge-manage">
+            <h3>覆盖上传（同名替换）</h3>
+            <p class="muted">选择与已建库文件同名的 PDF/DOCX：先删除旧文件再重新上传建库（仅上传者可覆盖）。</p>
+            <div class="upload-row">
+              <input id="knowledge-overwrite-picker" type="file" accept=".pdf,.docx" />
+              <button type="button" id="knowledge-overwrite-btn">覆盖上传</button>
+            </div>
+            <p id="knowledge-overwrite-status" class="file-status"></p>
+          </div>
+          <div class="file-picker knowledge-manage" id="knowledge-manage-list">
             <h3>已建库文件列表</h3>
             <div id="knowledge-file-list" class="uploaded-list"></div>
           </div>
