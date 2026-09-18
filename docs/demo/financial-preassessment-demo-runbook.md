@@ -12,13 +12,14 @@
 
 ## 演示前置条件
 
-- 主项目根：D:\AI\Codex\Projects\agent-workspace-tools
+- 主项目根：D:\AI\dsh\Projects\agent-workspace-tools
 - 统一演示入口：control_plane/static/** + /demo 挂载（最小自研前端）
 - 受控样例：work/demo/financial-preassessment/source（虚构 PDF/DOCX）
 - 导入清单：work/demo/financial-preassessment/import-manifest.json（仅 asset 到 material_key 映射）
 - 规则夹具：work/demo/financial-preassessment/rules/demo-bank-rules-v1.json（demo_fixture 且带 content_fingerprint）
 - 解释器：service/.venv/Scripts/python.exe
 - 一键初始化：scripts/init_demo_financial_preassessment.py（E3 幂等种子脚本：登录态 alice/demo-a-password + 按 import-manifest 建受控资产 + demo_fixture 规则）
+- 本地 LLM（路径 B 问答用）：llama.cpp llama-server 运行于 http://127.0.0.1:18080/v1，模型 qwen3.8-27b-local（/v1/models 可见）；llama-server 若启用了 --api-key 鉴权，启动演示服务前须注入 RAG_LLM_LOCAL_API_KEY，否则本地问答 fail-closed 为 REFUSED(llm_unavailable)；推理模型含思考过程耗时较长，代码默认 LLM 超时 120s，仍超时可注入 RAG_LLM_TIMEOUT_SECONDS 调大。
 - 本轮演示以控制面 API 契约与测试驱动为准；Dify 页面实机与真实服务部署不在本演示范围。
 
 ## 演示步骤
@@ -26,7 +27,7 @@
 ### 步骤 0：一键初始化演示环境（E3）
 
 - 展示内容：幂等可重复的初始化脚本一键建立「可演示」状态——登录态（alice/demo-a-password）、按 import-manifest 声明创建 Asset/AssetVersion（绑定真实文件 SHA-256、index_state=ready、active）、demo_fixture 规则版本（content_fingerprint 取自受控夹具）。
-- 输入：运行 service/.venv/Scripts/python.exe scripts/init_demo_financial_preassessment.py（默认在 http://127.0.0.1:8891 提供 /demo/）；仅建状态不启动服务用 --seed-only。
+- 输入：运行 service/.venv/Scripts/python.exe scripts/init_demo_financial_preassessment.py（默认在 http://127.0.0.1:8891 提供 /demo/）；仅建状态不启动服务用 --seed-only。本地问答需在启动前注入环境变量：RAG_LLM_LOCAL_API_KEY（llama-server 开启 --api-key 鉴权时）、按需 RAG_LLM_TIMEOUT_SECONDS。
 - 预期输出：打印 seed summary（asset_count=6、active_version_count=6、rule_version_count=1）；重复执行资产/规则数量不增长（assets_created/rule_versions_created=0）；初始化后路径 A 评估 MATCH 100。
 - 留证点：seed summary 输出；重复执行前后数量对比。
 
@@ -57,8 +58,8 @@
 
 - 展示内容：A 对已授权受控资料发起资料匹配度预评估。前端提供 E5 受控文件选择器（input type=file）。
 - E5 受控文件选择器：仅接受 import-manifest 白名单内 6 个受控样例文件名（资料概览与授权说明.docx / 收入情况说明.pdf / 资金流摘要.pdf / 资产负债说明.docx / 经营情况说明.docx / 补充材料清单.pdf）；选择白名单外文件，前端拦截并提示「底层拒绝」，enqueue_version 仍拒绝任意上传文件（安全断言不变）。
-- 演示期操作路径（「选中即自动发起评估」的 BFF 端点为 P1 延后，不属当前演示承诺）：① 在 E5 文件选择器中选择受控样例文件（通过白名单校验）→ ② 从初始化脚本 seed summary（scripts/init_demo_financial_preassessment.py --seed-only 输出）中取得对应 asset_id → ③ 手动填入 asset_ids → ④ 发起评估。
-- 输入：POST /api/assessments（可信 session、asset_ids、rule_version_id、query_subject）。
+- 演示期操作路径（P1 已落地）：前端只提交 import-manifest 白名单文件名，BFF 经 POST /api/controlled-sample/assess 自动解析为 asset_id 并复用 create_assessment_report（资产 ID 对演示隐藏，浏览器不再暴露 asset_ids）。
+- 输入：POST /api/controlled-sample/assess（可信 session、scenario=finance_profile_matching、query_subject、file_names=白名单内文件名）。
 - 预期输出：match_score=100、result_level=MATCH、missing_materials=[]、material/rule 两类引用、免责声明。
 - 留证点：报告 JSON 截图；match_score 只称资料匹配度。
 
@@ -81,7 +82,7 @@
 #### 步骤 7：权限前置召回与授权证据
 
 - 展示内容：同一登录态切换「知识库问答」tab。
-- 输入：输入问题 + asset_id，POST /api/retrieval/query。
+- 输入：选择受控样例文件并输入问题，POST /api/controlled-sample/query（前端不暴露 asset_id，BFF 自动解析白名单文件）。
 - 预期输出：权限前置召回先于 LLM 完成，返回授权证据（retrieved_count 等）；未授权资产在召回前 DENY，不进入 LLM。
 - 留证点：问答请求与授权证据截图；LLM 调用点位于授权裁决之后。
 
@@ -89,7 +90,7 @@
 
 - 展示内容：真实 LLM 依据授权证据生成回答草稿/润色，非确定性 chunk 摘录占位。
 - 输入：步骤 7 的授权证据进入 LLM。
-- 预期输出：返回 answer + 版本化 citations（asset_id/asset_version_id/chunk_id/page/paragraph/path_kind）；LLM 不裁决（不产出授权结论、最终评分权威、贷款/授信/额度/产品推荐）；LLM 凭证（api_key/base_url/model）不落前端、BFF 响应与审计。
+- 预期输出：返回 answer + 版本化 citations（asset_id/asset_version_id/chunk_id/page/paragraph/path_kind）；LLM 不裁决（不产出授权结论、最终评分权威、贷款/授信/额度/产品推荐）；LLM 凭证（api_key/base_url/model）不落前端、BFF 响应与审计。本地模型需在启动演示服务时注入 RAG_LLM_LOCAL_API_KEY；未注入时 llama-server 401，问答 fail-closed 为 REFUSED(llm_unavailable)、llm_invoked=true、retrieved_count>0——可作为「凭证不落前端 + 失败闭环」的补充展示点。
 - 留证点：answer 与 citations 截图；llm_invoked=true 审计截图。
 
 #### 步骤 9：路径 B 负向演示（必须演示）
@@ -108,13 +109,10 @@
 
 ### 步骤 11：控制面计划执行闭环（Agent Action Gateway 可验证执行，可选演示）
 
-- 展示内容：演示服务（init 脚本 main() 接线）已启用真实受控目录执行器 ControlledFileExecutor 与同根独立读回验证器 ControlledDirectoryVerifier（受控根 work/demo/financial-preassessment/controlled-actions/，已加入 .gitignore）。被授权的计划在运行中的 /demo 服务上真实执行并可独立读回验证，形成「计划 → 确认 → 执行 → 读回 → VERIFIED」闭环。本环节为 API 级演示（前端暂未提供计划操作 UI），作为可选增强演示，不占主故事。
-- 输入：
-  ① 登录 alice（demo-a-password），POST /api/uploads 上传一个文本文件（directory=organized，file=report.txt）；
-  ② POST /api/plans 创建 move_rename 计划（source_path=organized/report.txt → target_path=organized/report-moved.txt），决策等级 SELF_CONFIRM；
-  ③ POST /api/plans/{plan_id}/confirm（带 Idempotency-Key），计划真实执行并独立读回验证。
-- 预期输出：confirm 响应 execution_job.state=verified、plan.state=verified；审计事件 execution_verified（verification_status=verified）；受控根内真实文件变化——organized/report.txt 消失、organized/report-moved.txt 存在且内容指纹一致。破坏性操作（trash）走 APPROVAL_REQUIRED，需审批者 decide_approval 后执行并读回 VERIFIED。
-- 留证点：confirm 响应 execution_job=verified 截图；审计 execution_verified 事件截图；受控根实际文件状态（源消失、目标存在）。
+- 展示内容：演示服务（init 脚本 main() 接线）已启用真实受控目录执行器 ControlledFileExecutor 与同根独立读回验证器 ControlledDirectoryVerifier（受控根 work/demo/financial-preassessment/controlled-actions/，已加入 .gitignore）。闭环行为（计划 → 确认 → 执行 → 读回 → VERIFIED；trash 走 APPROVAL_REQUIRED 审批；MISMATCH → recovery_task）由控制面测试覆盖（test_controlled_file_executor / test_recovery / test_verification，HTTP 层 test_recovery_approval_http）。本环节为 API 级演示（前端暂未提供计划操作 UI），作为可选增强演示，不占主故事。
+- 实机负向（当前 /demo 默认可演示）：演示身份权限矩阵不授任何行动权限（alice 仅 QUERY、bob 无），故在运行中的 /demo 上：① POST /api/uploads（directory=organized）→ 403 upload_denied；② POST /api/plans 创建 move_rename 计划 → 403 plan_denied（实测 2026-09-18）。这是「行动零授权 fail-closed」的可演示负向，也是当前默认口径。
+- 正向实机演示前提：需向 repository 注入行动授权（如 PermissionGrant action=UPLOAD/MOVE_RENAME、path_prefix=organized/、principal 命中 alice），这超出演示身份矩阵，属 Q 决策；注入后按测试用例走上传 → 建计划 → confirm（带 Idempotency-Key）→ 预期 confirm 响应 execution_job.state=verified、plan.state=verified、审计 execution_verified（verification_status=verified）、受控根内源文件消失且目标存在、内容指纹一致；trash 需审批者 decide_approval 后执行并读回 VERIFIED。
+- 留证点（负向）：403 plan_denied / upload_denied 响应截图；审计零执行事件截图。
 - 负向分支（不必实机演示）：执行器层路径逃逸 fail-closed（create_plan 越界路径 → PermissionError）；验证失败 → HTTP 422 verification_failed + recovery_task（服务层 test_trash_verification / HTTP test_recovery_approval_http 已覆盖 MISMATCH→恢复/升级闭环）。
 
 ## 敏感信息禁显项
