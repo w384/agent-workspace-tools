@@ -4,13 +4,17 @@
 
 ## 演示能力
 
-- **登录与权限演示**：内置两个演示账号，可演示「有权限用户正常检索」与「无权限用户越权访问被拒」两类行为。
+- **登录与权限演示**：内置四个演示账号——`alice`（资料评估 / 知识库问答有权限）、`bob`（越权负向）、`carol`（计划执行：上传 / 移动 / 删除行动权限）、`dave`（独立审批者，四眼原则）。可演示「有权限用户正常执行」与「无权限用户越权访问被拒」两类行为。
 - **知识库问答**：两种提问来源——
-  - 上传真实材料：选择本地 PDF / DOCX 上传并自动建库（内存向量索引），随后对自建库提问；
+  - 上传真实材料：选择本地 PDF / DOCX 上传并自动建库（内存向量索引），随后对自建库提问；可**勾选多个文件跨文件一次提问**（`/api/demo/knowledge/query-multi`，任一文件无授权则整单 DENIED 零召回）；
   - 受控样例文件：从系统内置的 import-manifest 白名单中选择虚构样例，直接提问。
   - 问答模型可在「本地模型（llama）」与「联网模型（DeepSeek）」之间切换；联网模型支持在页面填写 API Key（登出即清空，不回写服务器）。
-- **资料预评估**：确定性规则引擎按演示银行规则做资料匹配度预评估，输出 match_score、结果等级（MATCH / POSSIBLE / NOT_MATCH）、已满足条件、缺失材料与版本化引用，并附固定免责声明。
-- **已建库文件管理**：列出当前账号已上传并建库的真实材料文件；上传者可在演示前手动删除，以便下次复用同名文件重新演示。受控样例文件不受影响。
+- **资料预评估**：两种评估方式——
+  - 受控样例评估：选择 import-manifest 白名单内 6 个受控样例文件，按规则夹具匹配；
+  - 真实材料评估（放宽白名单）：上传自己的真实 PDF / DOCX（≤2MB），为每个文件指定材料类别（资料概览 / 收入 / 资金流 / 资产负债 / 经营 / 补充材料清单），系统按同一套演示银行规则做资料匹配度预评估（`/api/real-material/assess`；该路径不建资产、不入知识库，任何登录身份可评估自己拖入的字节）。
+  - 确定性规则引擎输出 match_score、结果等级（MATCH / POSSIBLE / NOT_MATCH）、已满足条件、缺失材料与版本化引用，并附固定免责声明。
+- **已建库文件管理**：列出当前账号已上传并建库的真实材料文件；支持**覆盖上传（同名替换）**：先删旧文件再重新上传建库（仅上传者可覆盖）。上传者可在演示前手动删除，以便下次复用同名文件重新演示。受控样例文件不受影响。
+- **计划执行与验证闭环**（第四页 UI）：carol 上传任意文件到受控目录 organized/ → 移动（自确认即执行）或删除（需 dave 审批，四眼原则：发起人不能自批）→ 执行后独立读回验证（VERIFIED / MISMATCH）；验证失败自动落 Recovery Task（recovered / escalated）。
 - **登出重置**：Demo 阶段每次登出即清空本账号已上传 / 已建库文件与前端选中状态，重新登录从干净状态开始。
 - **控制面能力样板（API 层）**：在演示 UI 之外，工程同时落地 Agent 安全运行样板能力——身份与授权策略（Policy / Actor Context）、计划与审批（Plan / Approval / 幂等 / 计划哈希）、独立读回验证（Verification Adapter：VERIFIED / MISMATCH / UNKNOWN）、失败后的恢复与升级（Recovery Task：recovered / escalated + 审计事件）、MCP 暴露层（Policy / Assess / Query / Audit 四工具，支持可选 agent_id 演示「Agent 代表用户执行」：Agent 继承所属用户授权、动作以 agent_action_executed 审计留痕、无 QUERY 授权用户的 Agent 同样被拒）。演示服务已接入**真实受控目录执行器**（不再使用占位 file_executor=object()）：被授权的计划在受控目录上真实执行（上传 / 移动重命名 / 删除），执行后由独立读回适配器校验真实磁盘状态（文件存在 + SHA-256 指纹；破坏性删除读回源文件是否消失），VERIFIED / MISMATCH 闭环在运行中的 /demo 服务上可用。完整闭环与验收口径见 docs/engineering-principles.md 与 docs/verification/。
 
@@ -95,7 +99,7 @@
     # RAG 检索服务（LLM 生成 / 解释端口 / 文档解析 / 权限感知检索等）
     python -m pytest service/tests/rag -q
 
-核心验收口径：RAG LLM 20 passed、控制面 162 passed、service/tests/rag 72 passed、git diff --check 通过。
+核心验收口径：RAG LLM 20 passed、控制面 170 passed、service/tests/rag 72 passed、git diff --check 通过。
 
 ## 免责声明
 

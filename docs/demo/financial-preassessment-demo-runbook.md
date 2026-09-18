@@ -4,10 +4,12 @@
 
 ## 主话术
 
-统一演示入口 /demo/（最小自研前端），员工登录后同一界面两条路径并存：路径 A「资料预评估报告」与路径 B「LLM 知识库问答」。
+统一演示入口 /demo/（最小自研前端），员工登录后同一界面多条路径并存：路径 A「资料预评估报告」、路径 B「LLM 知识库问答」、路径 C「已建库文件管理」、路径 D「计划执行演示」。
 
-- 路径 A：员工上传或选择模拟资料后，系统把资料版本化、结构化，再根据演示银行规则样例做资料匹配度预评估，输出可匹配的示例银行类型、缺失材料和引用依据。
-- 路径 B：同一登录态下，员工基于已授权资料提出知识库问答；系统先做权限前置召回，再由真实 LLM 依据授权证据生成回答草稿/润色，返回 answer 与版本化 citations。
+- 路径 A：员工上传或选择模拟资料后，系统把资料版本化、结构化，再根据演示银行规则样例做资料匹配度预评估，输出可匹配的示例银行类型、缺失材料和引用依据。评估分「受控样例」（import-manifest 白名单）与「真实材料」（放宽白名单，自定类别）两种方式。
+- 路径 B：同一登录态下，员工基于已授权资料提出知识库问答；系统先做权限前置召回，再由真实 LLM 依据授权证据生成回答草稿/润色，返回 answer 与版本化 citations。可勾选多个已上传文件跨文件一次提问（query-multi）。
+- 路径 C：已建库真实材料文件管理：覆盖上传（同名替换）/ 删除，便于下次演示复用同名文件。
+- 路径 D：计划 → 确认/审批 → 执行 → 独立读回验证闭环（carol 行动 + dave 审批，四眼原则）。
 - 两路径结果仅供信息参考，不参与贷款申请、审批、授信、额度测算或金融产品销售。
 
 ## 演示前置条件
@@ -18,7 +20,7 @@
 - 导入清单：work/demo/financial-preassessment/import-manifest.json（仅 asset 到 material_key 映射）
 - 规则夹具：work/demo/financial-preassessment/rules/demo-bank-rules-v1.json（demo_fixture 且带 content_fingerprint）
 - 解释器：service/.venv/Scripts/python.exe
-- 一键初始化：scripts/init_demo_financial_preassessment.py（E3 幂等种子脚本：登录态 alice/demo-a-password + 按 import-manifest 建受控资产 + demo_fixture 规则）
+- 一键初始化：scripts/init_demo_financial_preassessment.py（E3 幂等种子脚本：登录态 alice/demo-a-password、bob/demo-b-password、carol/demo-c-password、dave/demo-d-password + 按 import-manifest 建受控资产 + demo_fixture 规则 + carol 三个行动授权 grant）
 - 本地 LLM（路径 B 问答用）：llama.cpp llama-server 运行于 http://127.0.0.1:18080/v1，模型 qwen3.8-27b-local（/v1/models 可见）；llama-server 若启用了 --api-key 鉴权，启动演示服务前须注入 RAG_LLM_LOCAL_API_KEY，否则本地问答 fail-closed 为 REFUSED(llm_unavailable)；推理模型含思考过程耗时较长，代码默认 LLM 超时 120s，仍超时可注入 RAG_LLM_TIMEOUT_SECONDS 调大。
 - 本轮演示以控制面 API 契约与测试驱动为准；Dify 页面实机与真实服务部署不在本演示范围。
 
@@ -33,10 +35,10 @@
 
 ### 步骤 1：统一入口 /demo/ 与演示定位
 
-- 展示内容：主话术；登录态下统一入口 /demo/ 首页含「资料预评估」「知识库问答」双 tab 与「免责声明」；受控样例目录结构与虚构 PDF/DOCX；导入清单；规则版本标签。
+- 展示内容：主话术；登录态下统一入口 /demo/ 首页含「资料预评估」「知识库问答」「已建库文件」「计划执行演示」四 tab 与「免责声明」；受控样例目录结构与虚构 PDF/DOCX；导入清单；规则版本标签。
 - 输入：浏览器打开 /demo/ 并完成受控身份登录。
-- 预期输出：首页显示双 tab + 免责声明；浏览器只调 BFF，不泄露 api_key/密钥/本地路径；样例文件集合与样例完整性测试固定集合一致；规则夹具显示 version_label=demo-2026-08-14 与 content_fingerprint。
-- 留证点：首页双 tab 与免责声明截图；样例目录列表截图；规则 JSON 的版本标签与指纹截图。
+- 预期输出：首页显示四 tab + 免责声明；登录面板展示四个演示账号提示（alice 有权限 / bob 越权负向 / carol 计划执行 / dave 审批者）；浏览器只调 BFF，不泄露 api_key/密钥/本地路径；样例文件集合与样例完整性测试固定集合一致；规则夹具显示 version_label=demo-2026-08-14 与 content_fingerprint。
+- 留证点：首页四 tab 与免责声明截图；样例目录列表截图；规则 JSON 的版本标签与指纹截图。
 
 ### 路径 A「资料预评估报告」
 
@@ -63,6 +65,14 @@
 - 预期输出：match_score=100、result_level=MATCH、missing_materials=[]、material/rule 两类引用、免责声明。
 - 留证点：报告 JSON 截图；match_score 只称资料匹配度。
 
+#### 步骤 4b：真实材料评估（放宽白名单，新增）
+
+- 展示内容：Q 已明确「真实材料预评估放宽白名单」——评估页新增「真实材料评估」表单：上传自己的真实 PDF/DOCX（≤2MB），为每个文件选择对应材料类别（资料概览 / 收入情况 / 资金流 / 资产负债 / 经营情况 / 补充材料清单，与演示银行规则 requirements 的 material_key 对齐），提交后按同一套规则夹具做资料匹配度预评估。
+- 安全边界：走显式端点 POST /api/real-material/assess（任何登录身份评估自己拖入的字节，无需 QUERY grant、不建资产、不入知识库、不产生授信/额度结论）；受控样例评估的 E5 白名单限制原样保留；`enqueue_version` 拒绝任意上传的约束不变。
+- 输入：multipart（scenario、query_subject、files 多个 + material_keys 与文件对齐）。
+- 预期输出：报告与受控路径同构（match_score / result_level / missing_materials / candidate_banks / citations，asset_versions=[]）；提供规则 A 全部三类材料 → MATCH 100 / missing=[]；部分材料 → 报告列出缺失类别。
+- 留证点：报告 JSON 截图；缺失材料列表截图；bob（无 QUERY grant）评估自己文件成功 200。
+
 #### 步骤 5：引用与规则依据
 
 - 展示内容：资料引用（asset_id、asset_version_id、chunk_id、page/paragraph）与规则引用（rule_id、rule_version_id、version_label、content_fingerprint、source_type）。
@@ -82,7 +92,7 @@
 #### 步骤 7：权限前置召回与授权证据
 
 - 展示内容：同一登录态切换「知识库问答」tab。
-- 输入：选择受控样例文件并输入问题，POST /api/controlled-sample/query（前端不暴露 asset_id，BFF 自动解析白名单文件）。
+- 输入：选择受控样例文件并输入问题，POST /api/controlled-sample/query（前端不暴露 asset_id，BFF 自动解析白名单文件）；或勾选多个已上传真实材料，POST /api/demo/knowledge/query-multi（跨文件一次检索，去重后 ≤6 文件；任一文件未授权 → 整单 DENIED 零召回零 LLM 调用，fail-closed）。
 - 预期输出：权限前置召回先于 LLM 完成，返回授权证据（retrieved_count 等）；未授权资产在召回前 DENY，不进入 LLM。
 - 留证点：问答请求与授权证据截图；LLM 调用点位于授权裁决之后。
 
@@ -109,9 +119,10 @@
 
 ### 步骤 11：控制面计划执行闭环（Agent Action Gateway 可验证执行，可选演示）
 
-- 展示内容：演示服务（init 脚本 main() 接线）已启用真实受控目录执行器 ControlledFileExecutor 与同根独立读回验证器 ControlledDirectoryVerifier（受控根 work/demo/financial-preassessment/controlled-actions/，已加入 .gitignore）。闭环行为（计划 → 确认 → 执行 → 读回 → VERIFIED；trash 走 APPROVAL_REQUIRED 审批；MISMATCH → recovery_task）由控制面测试覆盖（test_controlled_file_executor / test_recovery / test_verification，HTTP 层 test_recovery_approval_http）。本环节为 API 级演示（前端暂未提供计划操作 UI），作为可选增强演示，不占主故事。
-- 实机负向（当前 /demo 默认可演示）：演示身份权限矩阵不授任何行动权限（alice 仅 QUERY、bob 无），故在运行中的 /demo 上：① POST /api/uploads（directory=organized）→ 403 upload_denied；② POST /api/plans 创建 move_rename 计划 → 403 plan_denied（实测 2026-09-18）。这是「行动零授权 fail-closed」的可演示负向，也是当前默认口径。
-- 正向实机演示前提：需向 repository 注入行动授权（如 PermissionGrant action=UPLOAD/MOVE_RENAME、path_prefix=organized/、principal 命中 alice），这超出演示身份矩阵，属 Q 决策；注入后按测试用例走上传 → 建计划 → confirm（带 Idempotency-Key）→ 预期 confirm 响应 execution_job.state=verified、plan.state=verified、审计 execution_verified（verification_status=verified）、受控根内源文件消失且目标存在、内容指纹一致；trash 需审批者 decide_approval 后执行并读回 VERIFIED。
+- 展示内容：演示服务已启用真实受控目录执行器 ControlledFileExecutor 与同根独立读回验证器 ControlledDirectoryVerifier（受控根 work/demo/financial-preassessment/controlled-actions/，已加入 .gitignore）。闭环行为（计划 → 确认 → 执行 → 读回 → VERIFIED；trash 走 APPROVAL_REQUIRED 审批；MISMATCH → recovery_task）由控制面测试覆盖（test_controlled_file_executor / test_recovery / test_verification，HTTP 层 test_recovery_approval_http、test_demo_carol_plan_flow）。
+- 前端已提供「计划执行演示」tab（第四页，路径 D）：① carol 上传任意文件到受控目录 organized/（≤2MB，POST /api/demo/plan-demo/upload，不走 rag enqueue）；② 移动（SELF_CONFIRM，carol 确认后真实迁移文件、读回 VERIFIED）或删除（APPROVAL_REQUIRED，carol 建计划）；③ 切 dave 登录审批（四眼原则：carol 尝试自批 → 403 approval_forbidden）；④ 审批通过后执行删除并读回 VERIFIED；验证失败时「恢复任务」区出现 MISMATCH 的 Recovery Task，可标记 recovered / escalated。
+- 实机负向（当前 /demo 默认可演示）：演示身份权限矩阵不授 bob 任何行动权限，故 bob 上传 / 建计划 → 403 upload_denied / plan_denied（实测 2026-09-18）——「行动零授权 fail-closed」的可演示负向。
+- 正向实机演示前提：种子脚本已为 carol（user-c）注入 organized/ 上 UPLOAD / MOVE_RENAME / TRASH 三个行动授权 grant（幂等）；按测试用例走上传 → 建计划 → confirm（带 Idempotency-Key）→ 预期 confirm 响应 execution_job.state=verified、plan.state=verified、审计 execution_verified（verification_status=verified）、受控根内源文件消失且目标存在、内容指纹一致；trash 需 dave decide_approval 后执行并读回 VERIFIED。
 - 留证点（负向）：403 plan_denied / upload_denied 响应截图；审计零执行事件截图。
 - 负向分支（不必实机演示）：执行器层路径逃逸 fail-closed（create_plan 越界路径 → PermissionError）；验证失败 → HTTP 422 verification_failed + recovery_task（服务层 test_trash_verification / HTTP test_recovery_approval_http 已覆盖 MISMATCH→恢复/升级闭环）。
 

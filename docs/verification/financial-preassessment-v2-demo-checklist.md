@@ -199,6 +199,19 @@ git diff --check
 - 提交链（main，未推送 origin）：fff894c test(control_plane): 接线测试补审计断言——execution_verified 事件与 plan verified 状态 → cdd8e8f docs(demo): runbook 新增控制面计划执行闭环可选演示章节并修正过时边界声明。
 - 红线：未 push origin、未建分支、main 直链保持；工作区仅剩既有 work/.tmp-demo-serve.log* 与受限 ACL 目录残留（随批次处理，非本轮改动）。
 
+## 实际结果（2026-08-27 实测 · v3 四功能批次：真实材料预评估 + 计划执行 UI + 问答/文件管理增强 + 演示包装）
+
+背景：Q 指定「把接下来的功能做完后再统一 push」。本批四项——①真实材料预评估（放宽白名单）；②计划执行闭环 UI 化（carol 行动 + dave 审批者身份）；③知识库问答多文件跨文件检索 + 已建库文件覆盖上传；④演示包装与登录优化（标题 / 免责声明 / 演示账号提示 / 四 tab）。功能全部完成、测试全绿、文档同步后统一 push。
+
+- 功能① 真实材料预评估（放宽白名单）：新增 POST /api/real-material/assess（multipart：scenario / query_subject / files + material_keys 对齐；≤6 文件、≤2MB、PDF/DOCX、material_key ∈ 6 类别与规则夹具 requirements 对齐）。桥接 FinanceDemoLlmRagPort.assess_real_materials：解析上传字节 → 按类别建 MaterialFact → 复用同一套确定性规则夹具匹配（含候选银行评分），citations 用合成 real-material-N 资产 id，报告与受控路径同构（asset_versions=[]）。任何登录身份评估自己拖入的字节，无需 QUERY grant、不建资产、不入知识库；`enqueue_version` 拒绝任意上传约束不变（Q 指定放宽白名单，权威#1）。测试 test_real_material_assess.py 4 项：全类别 MATCH 100 / 部分类别显示缺失 / bob 评估白名单外文件 200 / 输入守卫 422（unknown_material_key、material_key_mismatch、files_required、unsupported_file_type）。
+- 功能② 计划执行闭环 UI 化：种子脚本新增 carol（user-c，organized/ 上 UPLOAD/MOVE_RENAME/TRASH 三行动授权 grant）与 dave（user-d，仅审批者角色）；前端第四 tab「计划执行演示」：carol 上传（专用端点 /api/demo/plan-demo/upload，不走 rag enqueue）→ 移动（SELF_CONFIRM 自确认即执行，读回 VERIFIED）或删除（APPROVAL_REQUIRED）→ dave 审批（四眼原则：carol 自批 403 approval_forbidden）→ 执行后读回 VERIFIED；验证失败落 Recovery Task。测试 test_demo_carol_plan_flow.py（carol 上传→move→confirm→VERIFIED 文件真实迁移；trash→dave 批准→VERIFIED 文件删除；bob 负向 403）。
+- 功能③ 问答/文件管理增强：demo_rag.query_multi（多资产 scopes 合并一次检索；all-or-nothing：任一文件未授权 → 整单 DENIED 零召回零 LLM 调用，fail-closed）+ POST /api/demo/knowledge/query-multi（去重、≤6 文件、输入守卫 422/404）+ 前端 QA 上传列表改复选框多选跨文件一次提问；已建库文件 tab 加「覆盖上传（同名替换）」（先删后传，仅上传者可覆盖，其他账号文件拒绝）。测试 test_knowledge_upload_bridge.py 新增 3 项（跨两文件合并检索 ANSWERED / 越权任一文件 DENIED 零调用 / 输入守卫）。
+- 功能④ 演示包装与登录优化：页面标题「Agent 行动安全网关 · 演示」、header 免责声明副标题、登录面板四账号提示（alice / bob / carol / dave）、预评估 tab demo-guide 双评估方式说明、重新登录强制同步模型状态并加载已建库文件（云端 Key 残留修复）、登出清空会话内上传/勾选/真实材料列表。
+- 集成回归（提权，新鲜原始输出）：control_plane/tests 全量 170 passed in 4.54s（162 基线 + 3 query-multi + 4 真实材料评估 + 1 前端 v2 文案对齐）；RAG LLM 20 passed in 0.09s；service/tests/rag 72 passed in 0.29s；git diff --check exit 0（仅既有 LF 转 CRLF warning）；node --check app.js 通过。
+- 文档同步：README（四账号 / 双评估方式 / 跨文件问答 / 覆盖上传 / 计划执行闭环；测试口径 162→170）、runbook（四路径主话术、前置条件四账号、步骤 1 四 tab、新增步骤 4b 真实材料评估、步骤 7 query-multi、步骤 11 计划执行 UI 化）、AGENTS.md（四页 UI / 170 基线 / 放宽白名单约束声明）。
+- 提交链（main，统一 push 前）：098cbc6 docs(demo) runbook llama 同步 → 0bb3641 docs(deploy) 云端实际部署回填 → e7886db feat(plan-demo) carol+dave 身份 + 计划演示专用上传端点 → 1f56257 feat(plan-demo) 计划执行 UI + 审批 payload 富化 plan_hash → cf2d454 feat(knowledge) query-multi 跨文件问答 + 覆盖上传 → 2e8fa58 feat(preassessment) 真实材料预评估（放宽白名单）→ AGENTS.md 约束同步（本地文件不提交）。六功能提交 + 文档后统一 push origin。
+- 红线：push 按 Q 明确指令执行（功能完成统一 push）；未建分支、未触碰 Dify / 公共盘 / ACL；云端部署同步（106.53.200.115:8891 git pull）在 push 后执行。
+
 ## 关键断言
 
 路径 B（LLM 知识库问答）：
