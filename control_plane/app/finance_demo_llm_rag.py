@@ -25,8 +25,13 @@ from control_plane.app.finance_demo_rag import FinanceDemoRagPort
 from control_plane.app.ports import AssessmentResult
 from control_plane.app.repository import ControlPlaneRepository
 
-from service.app.rag.contracts import ActiveAssetVersion, LLMConfigurationError
+from service.app.rag.contracts import (
+    ActiveAssetVersion,
+    LLMConfigurationError,
+    PermissionContext,
+)
 from service.app.rag.demo_document_parser import DemoDocumentParser
+from service.app.rag.finance_matching import MaterialFact
 from service.app.rag.index import InMemorySearchIndex
 from service.app.rag.ingestion import IngestionRequest
 from service.app.rag.llm import build_llm_answer_generator
@@ -246,6 +251,107 @@ class FinanceDemoLlmRagPort:
     ) -> AssessmentResult:
         return self._assess_port.assess_versions(
             actor, asset_versions, rule_version, query_subject
+        )
+
+    def assess_real_materials(
+        self,
+        actor: TrustedActorContext,
+        rule_version: RuleVersion,
+        query_subject: str,
+        materials: tuple[tuple[str, str, bytes], ...],
+    ) -> AssessmentResult:
+        """Assess user-dragged real PDF/DOCX materials by material category.
+
+        The user brings their own bytes, so authorization is just the
+        authenticated session (no asset / no grant needed). The deterministic
+        rules fixture is matched the same way as the controlled samples, with
+        explicit material_key per file; citations carry synthetic
+        "real-material-N" ids so the report renders identically.
+        """
+        if not materials:
+            raise ValueError("real-material assessment requires at least one file")
+        parser = DemoDocumentParser(self._source_root)
+        index = InMemorySearchIndex(scorer=lambda _question, _chunk: 1.0)
+        chunks: list[object] = []
+        facts = []
+        active_versions: list[ActiveAssetVersion] = []
+        for item_index, (material_key, file_name, content) in enumerate(materials):
+            version = ActiveAssetVersion(
+                f"real-material-{item_index + 1}", f"real-material-{item_index + 1}"
+            )
+            active_versions.append(version)
+            parsed_chunks = parser.parse_bytes(
+                IngestionRequest(
+                    tenant_id=self._workspace_id,
+                    target_version=version,
+                    source_ref=file_name,
+                    content_fingerprint="sha256:" + hashlib.sha256(content).hexdigest(),
+                    mime_type=_mime_type_for(file_name),
+                    size_bytes=len(content),
+                ),
+                content,
+            )
+            chunks.extend(parsed_chunks)
+            facts.extend(
+                MaterialFact(material_key=material_key, chunk=chunk)
+                for chunk in parsed_chunks
+            )
+        index.rebuild(chunks)
+        rule_snapshot = self._assess_port._rule_snapshot(rule_version)
+        context = PermissionContext(
+            tenant_id=actor.workspace_id,
+            principal_id=actor.actor_id,
+            group_ids=tuple(sorted(actor.group_ids)),
+            session_id=actor.session_id,
+            request_id=actor.request_id,
+        )
+        result, hits = self._assess_port._match_with_explanation(
+            context=context,
+            facts=tuple(facts),
+            index=index,
+            active_versions=tuple(active_versions),
+            rule_snapshot=rule_snapshot,
+            include_explanation=False,
+        )
+        if result.status is None:
+            raise PermissionError("finance demo matching scope denied")
+        candidate_banks = self._assess_port._candidate_bank_entries(
+            rule_version=rule_version,
+            hits=hits,
+        )
+        return AssessmentResult(
+            match_score=result.match_score,
+            result_level=result.status.value,
+            missing_materials=tuple(
+                requirement.label for requirement in result.missing_materials
+            ),
+            bank_label=result.bank_label,
+            candidate_banks=candidate_banks,
+            citations=tuple(
+                [
+                    {
+                        "citation_type": "material",
+                        "asset_id": citation.asset_id,
+                        "asset_version_id": citation.asset_version_id,
+                        "chunk_id": citation.chunk_id,
+                        "page": citation.page_number,
+                        "paragraph": citation.paragraph_index,
+                        "rule_version_id": rule_version.rule_version_id,
+                    }
+                    for citation in result.material_citations
+                ]
+                + [
+                    {
+                        "citation_type": "rule",
+                        "rule_id": citation.rule_id,
+                        "rule_version_id": citation.rule_version_id,
+                        "version_label": citation.version_label,
+                        "content_fingerprint": citation.content_fingerprint,
+                        "source_type": citation.source_type.value,
+                    }
+                    for citation in result.rule_citations
+                ]
+            ),
         )
 
     def resolve_controlled_asset(

@@ -17,6 +17,18 @@
     CONTROLLED_SAMPLE_FILES.map((item) => item.name)
   );
 
+  // 真实材料评估：文件可归属的材料类别（material_key 与演示银行规则 requirements 对齐）
+  const REAL_MATERIAL_CATEGORIES = [
+    { key: "customer_profile", label: "资料概览与授权说明" },
+    { key: "income_statement", label: "收入情况说明" },
+    { key: "cashflow_summary", label: "资金流摘要" },
+    { key: "asset_liability_statement", label: "资产负债说明" },
+    { key: "business_profile", label: "经营情况说明" },
+    { key: "supplement_material_list", label: "补充材料清单" },
+  ];
+  // 真实材料评估：{ file, key } 列表（每文件一个类别，登出清空）
+  let realMaterialFiles = [];
+
   let cloudKeyConfigured = false;
   // 当前问答展示的模型名（回答卡片标注真实调用来源）
   let currentModelLabel = "本地模型（llama qwen3.8-27b-local）";
@@ -166,6 +178,112 @@
       card.appendChild(el("p", "disclaimer", "免责声明：" + report.disclaimer));
     }
     area.appendChild(card);
+  }
+
+  function renderRealMaterialItems() {
+    const wrap = $("#real-material-items");
+    const status = $("#real-file-status");
+    if (!wrap) return;
+    wrap.replaceChildren();
+    realMaterialFiles.forEach((entry, index) => {
+      const row = el("div", "real-material-row");
+      const nameSpan = el("span", "real-material-name", entry.file.name);
+      const select = document.createElement("select");
+      select.className = "real-material-key";
+      REAL_MATERIAL_CATEGORIES.forEach((category) => {
+        const option = document.createElement("option");
+        option.value = category.key;
+        option.textContent = category.label;
+        if (category.key === entry.key) option.selected = true;
+        select.appendChild(option);
+      });
+      select.addEventListener("change", () => {
+        entry.key = select.value;
+      });
+      const removeBtn = el("button", "real-material-remove", "移除");
+      removeBtn.type = "button";
+      removeBtn.addEventListener("click", () => {
+        realMaterialFiles.splice(index, 1);
+        renderRealMaterialItems();
+      });
+      row.appendChild(nameSpan);
+      row.appendChild(select);
+      row.appendChild(removeBtn);
+      wrap.appendChild(row);
+    });
+    if (status) {
+      status.className = "file-status" + (realMaterialFiles.length ? " file-status-ok" : "");
+      status.textContent = realMaterialFiles.length
+        ? "已添加 " + realMaterialFiles.length + " 个文件，请确认每个文件的材料类别后点「评估真实材料」。"
+        : "未选择文件。";
+    }
+  }
+
+  function handleRealFilePicker() {
+    const picker = $("#real-file-picker");
+    if (!picker || !picker.files || !picker.files.length) return;
+    Array.from(picker.files).forEach((file) => {
+      // 客户端先拦超限与扩展名，服务端仍会二次校验
+      if (file.size > 2 * 1024 * 1024) {
+        setFilePickerError("真实材料文件超过 2MB 上限：" + file.name);
+        return;
+      }
+      const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+      if (ext !== ".pdf" && ext !== ".docx") {
+        setFilePickerError("仅支持 PDF/DOCX 真实材料：" + file.name);
+        return;
+      }
+      realMaterialFiles.push({ file: file, key: REAL_MATERIAL_CATEGORIES[0].key });
+    });
+    picker.value = "";
+    renderRealMaterialItems();
+  }
+
+  function setFilePickerError(message) {
+    const status = $("#real-file-status");
+    if (status) {
+      status.className = "file-status file-status-error";
+      status.textContent = message;
+    }
+  }
+
+  async function assessRealMaterials(event) {
+    event.preventDefault();
+    const result = $("#assessment-result");
+    if (!realMaterialFiles.length) {
+      const status = $("#real-file-status");
+      if (status) {
+        status.className = "file-status file-status-error";
+        status.textContent = "请先选择要评估的真实材料文件。";
+      }
+      return;
+    }
+    const formData = new FormData();
+    const scenarioField = $('[name="scenario"]');
+    const subjectField = $('[name="query_subject"]');
+    formData.append("scenario", scenarioField ? scenarioField.value : "finance_profile_matching");
+    formData.append("query_subject", subjectField ? subjectField.value : "customer-demo-001");
+    realMaterialFiles.forEach((entry) => {
+      formData.append("files", entry.file, entry.file.name);
+      formData.append("material_keys", entry.key);
+    });
+    result.replaceChildren();
+    result.appendChild(el("p", "report-empty", "正在按规则夹具匹配真实材料…"));
+    try {
+      const payload = await multipartRequest("/api/real-material/assess", formData);
+      renderReport(payload.report);
+    } catch (error) {
+      result.replaceChildren(
+        el("p", "report-error", "真实材料评估失败：" + error.message)
+      );
+    }
+  }
+
+  function resetRealMaterialAssessment() {
+    realMaterialFiles = [];
+    renderRealMaterialItems();
+    const picker = $("#real-file-picker");
+    if (picker) picker.value = "";
   }
 
   function renderDenied(payload) {
@@ -347,6 +465,7 @@
     resetControlledFilePickers();
     resetUploadedMaterials();
     resetKnowledgeFiles();
+    resetRealMaterialAssessment();
     resetModelUi();
     resetPlanDemo();
     activateTab("assessment");
@@ -1243,7 +1362,12 @@
   }
   $("#login-form").addEventListener("submit", login);
   $("#assessment-form").addEventListener("submit", assess);
+  $("#real-assessment-form").addEventListener("submit", assessRealMaterials);
   $("#qa-form").addEventListener("submit", ask);
+  const realFilePicker = $("#real-file-picker");
+  if (realFilePicker) {
+    realFilePicker.addEventListener("change", handleRealFilePicker);
+  }
   const filePicker = $("#demo-file-picker");
   if (filePicker) {
     filePicker.addEventListener("change", handleFileSelection);

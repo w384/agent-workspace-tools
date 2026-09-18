@@ -63,6 +63,18 @@ UPLOADED_DIR = "客户上传资料"
 MAX_KNOWLEDGE_UPLOAD_BYTES = 2 * 1024 * 1024
 ALLOWED_KNOWLEDGE_EXTENSIONS = frozenset({".pdf", ".docx"})
 MAX_KNOWLEDGE_QUERY_FILES = 6
+MAX_REAL_MATERIAL_FILES = 6
+# 与 demo-bank-rules-v1 夹具 requirements 的 material_key 集合一致
+KNOWN_MATERIAL_KEYS = frozenset(
+    {
+        "customer_profile",
+        "income_statement",
+        "cashflow_summary",
+        "asset_liability_statement",
+        "business_profile",
+        "supplement_material_list",
+    }
+)
 
 
 class LoginRequest(BaseModel):
@@ -850,6 +862,109 @@ def create_app(
             "version_id": asset_version.asset_version_id,
             "content_fingerprint": executor_result.content_fingerprint,
             "decision": {"state": decision.state.value, "reason": decision.reason},
+        }
+
+
+    @app.post("/api/real-material/assess")
+    async def real_material_assess(
+        scenario: str = Form(...),
+        query_subject: str = Form(...),
+        files: list[UploadFile] | None = File(default=None),
+        material_keys: list[str] = Form(...),
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        """真实材料预评估（放宽白名单）：上传真实 PDF/DOCX + 指定材料类别。
+
+        每个文件带一个 material_key（与演示银行规则 requirements 对齐），
+        复用同一套确定性规则夹具做资料匹配度预评估；不需要建资产、
+        不需要授权 grant（用户评估的是自己拖入的字节）。受控样例路径原样保留。
+        """
+        if not files:
+            raise ApiError(422, "files_required", "At least one file is required")
+        if len(files) > MAX_REAL_MATERIAL_FILES:            raise ApiError(
+                422,
+                "too_many_files",
+                f"Assessing more than {MAX_REAL_MATERIAL_FILES} files at once is not supported",
+            )
+        if len(material_keys) != len(files):
+            raise ApiError(
+                422,
+                "material_key_mismatch",
+                "Each file needs exactly one material category",
+            )
+        materials: list[tuple[str, str, bytes]] = []
+        for file, material_key in zip(files, material_keys):
+            file_name = _require_upload_file_name(file.filename or "")
+            extension = Path(file_name).suffix.lower()
+            if extension not in ALLOWED_KNOWLEDGE_EXTENSIONS:
+                raise ApiError(
+                    422,
+                    "unsupported_file_type",
+                    "Only PDF/DOCX uploads are supported",
+                )
+            content = await file.read()
+            if not content:
+                raise ApiError(422, "empty_file", "Uploaded file is empty")
+            if len(content) > MAX_KNOWLEDGE_UPLOAD_BYTES:
+                raise ApiError(
+                    422,
+                    "file_too_large",
+                    "Uploaded file exceeds the 2MB demo limit",
+                )
+            key = (material_key or "").strip()
+            if key not in KNOWN_MATERIAL_KEYS:
+                raise ApiError(
+                    422,
+                    "unknown_material_key",
+                    f"Unknown material category: {material_key}",
+                )
+            materials.append((key, file_name, content))
+        repository = app.state.repository
+        rule_version_id = _active_demo_rule_version(repository, scenario)
+        if rule_version_id is None:
+            raise ApiError(
+                422,
+                "no_active_demo_rule_version",
+                "No active demo rule version is available for the scenario",
+            )
+        rule_version = repository.rule_versions[rule_version_id]
+        rag = app.state.rag_port
+        if not hasattr(rag, "assess_real_materials"):
+            raise ApiError(
+                404,
+                "real_material_assess_unavailable",
+                "Real-material assessment bridge is not available",
+            )
+        try:
+            outcome = rag.assess_real_materials(
+                actor,
+                rule_version,
+                query_subject,
+                tuple(materials),
+            )
+        except ValueError as error:
+            raise ApiError(
+                422,
+                "real_material_assess_failed",
+                str(error),
+            ) from error
+        except PermissionError as error:
+            raise ApiError(
+                403,
+                "assessment_denied",
+                "Assessment is not authorized",
+            ) from error
+        return {
+            "report": {
+                "match_score": outcome.match_score,
+                "result_level": outcome.result_level,
+                "missing_materials": list(outcome.missing_materials),
+                "bank_label": outcome.bank_label,
+                "candidate_banks": list(outcome.candidate_banks),
+                "citations": list(outcome.citations),
+                # 真实材料无资产记录，与受控报告保持同构（前端渲染不变）
+                "asset_versions": [],
+            }
         }
 
 

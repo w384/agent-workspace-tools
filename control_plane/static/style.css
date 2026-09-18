@@ -560,3 +560,31 @@ button[type="submit"]:hover {
   accent-color: var(--accent-dark);
 }
 
+.real-material-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-soft, #e5e5e5);
+}
+
+.real-material-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+  font-size: 13px;
+}
+
+.real-material-key {
+  flex-shrink: 0;
+  max-width: 220px;
+  font-size: 13px;
+  padding: 3px 6px;
+}
+
+.real-material-remove {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+

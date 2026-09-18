@@ -334,8 +334,16 @@ class AsgiClient:
         params: dict[str, str] | None = None,
         headers: dict[str, str] | None = None,
         json_body: dict[str, Any] | None = None,
-        data: dict[str, str] | None = None,
-        files: dict[str, tuple[str, bytes, str]] | None = None,
+        data: (
+            dict[str, str]
+            | list[tuple[str, str]]
+            | None
+        ) = None,
+        files: (
+            dict[str, tuple[str, bytes, str]]
+            | list[tuple[str, tuple[str, bytes, str]]]
+            | None
+        ) = None,
     ) -> AsgiResponse:
         body = b""
         request_headers = {key.lower(): value for key, value in (headers or {}).items()}
@@ -429,11 +437,16 @@ class AsgiClient:
 
 
 def _multipart_body(
-    data: dict[str, str], files: dict[str, tuple[str, bytes, str]]
+    data: (
+        dict[str, str]
+        | list[tuple[str, str]]
+    ),
+    files: dict[str, tuple[str, bytes, str]] | list[tuple[str, tuple[str, bytes, str]]],
 ) -> tuple[bytes, str]:
     boundary = "control-plane-test-boundary"
     chunks: list[bytes] = []
-    for name, value in data.items():
+    data_items = data.items() if isinstance(data, dict) else data
+    for name, value in data_items:
         chunks.extend(
             (
                 f"--{boundary}\r\n".encode("ascii"),
@@ -442,7 +455,12 @@ def _multipart_body(
                 b"\r\n",
             )
         )
-    for name, (file_name, content, content_type) in files.items():
+    file_items = (
+        files.items()
+        if isinstance(files, dict)
+        else files
+    )
+    for name, (file_name, content, content_type) in file_items:
         chunks.extend(
             (
                 f"--{boundary}\r\n".encode("ascii"),
