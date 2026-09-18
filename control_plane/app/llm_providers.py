@@ -3,7 +3,7 @@
 The demo exposes two runtime-switchable answer providers:
 
 - "local" (default): llama.cpp llama-server served via its OpenAI-compatible
-  endpoint, model qwen3.6:27b-q4_K_M; API key optional (inject via
+  endpoint, model qwen3.8-27b-local; API key optional (inject via
   RAG_LLM_LOCAL_API_KEY when llama-server runs with --api-key auth).
 - "cloud": DeepSeek OpenAI-compatible endpoint. The API key is never
   exposed to the frontend, the BFF response, or the audit trail; it is
@@ -48,7 +48,7 @@ def _local_secrets(environment: Mapping[str, str]) -> ProviderSecrets:
             "RAG_LLM_LOCAL_BASE_URL", "http://127.0.0.1:18080/v1"
         ).strip(),
         api_key=environment.get("RAG_LLM_LOCAL_API_KEY", "").strip(),
-        model=environment.get("RAG_LLM_LOCAL_MODEL", "qwen3.6:27b-q4_K_M").strip(),
+        model=environment.get("RAG_LLM_LOCAL_MODEL", "qwen3.8-27b-local").strip(),
     )
 
 
@@ -88,8 +88,8 @@ class LLMProviderRegistry:
         return [
             ProviderDescriptor(
                 id=LOCAL_PROVIDER_ID,
-                label="本地模型（llama qwen3.6:27b-q4_K_M）",
-                model="qwen3.6:27b-q4_K_M",
+                label="本地模型（llama qwen3.8-27b-local）",
+                model="qwen3.8-27b-local",
             ),
             ProviderDescriptor(
                 id=CLOUD_PROVIDER_ID,

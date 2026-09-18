@@ -19,7 +19,7 @@
 
   let cloudKeyConfigured = false;
   // 当前问答展示的模型名（回答卡片标注真实调用来源）
-  let currentModelLabel = "本地模型（llama qwen3.6:27b-q4_K_M）";
+  let currentModelLabel = "本地模型（llama qwen3.8-27b-local）";
   // 会话内已上传的真实材料（自动建库），登出时清空
   let qaUploadedFiles = [];
   // 本会话真正上传成功的文件（409 时用于区分「本人上传」还是「可能其他账号」）
@@ -305,7 +305,7 @@
   // 登出时重置模型区：清空云端 Key（BFF 已同步清）、回退本地模型高亮
   function resetModelUi() {
     cloudKeyConfigured = false;
-    currentModelLabel = "本地模型（llama qwen3.6:27b-q4_K_M）";
+    currentModelLabel = "本地模型（llama qwen3.8-27b-local）";
     const keyPanel = $("#cloud-key-panel");
     if (keyPanel) keyPanel.classList.add("hidden");
     const keyInput = $("#cloud-api-key");

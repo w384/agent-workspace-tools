@@ -18,7 +18,7 @@ class LLMConfig:
     base_url: str
     api_key: str
     model: str
-    timeout_seconds: float = 30.0
+    timeout_seconds: float = 120.0
 
 
 def load_llm_config(
@@ -36,7 +36,7 @@ def load_llm_config(
         "RAG_LLM_TIMEOUT_SECONDS", ""
     ).strip()
     timeout_seconds = (
-        float(raw_timeout) if raw_timeout else 30.0
+        float(raw_timeout) if raw_timeout else 120.0
     )
     if timeout_seconds <= 0:
         raise LLMConfigurationError(

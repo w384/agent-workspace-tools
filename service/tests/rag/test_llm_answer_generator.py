@@ -358,12 +358,12 @@ def test_llm_config_allows_empty_api_key_for_local_llama():
         {
             "RAG_LLM_BASE_URL": "http://127.0.0.1:18080/v1",
             "RAG_LLM_API_KEY": "",
-            "RAG_LLM_MODEL": "qwen3.6:27b-q4_K_M",
+            "RAG_LLM_MODEL": "qwen3.8-27b-local",
         }
     )
     assert config.base_url == "http://127.0.0.1:18080/v1"
     assert config.api_key == ""
-    assert config.model == "qwen3.6:27b-q4_K_M"
+    assert config.model == "qwen3.8-27b-local"
 
 
 def test_build_answer_generator_uses_injected_credentials():

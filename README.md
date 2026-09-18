@@ -39,11 +39,12 @@
 
 本地模型（默认）：
 
-- 默认端点 `http://127.0.0.1:18080/v1`（llama.cpp llama-server OpenAI 兼容端点）、默认模型 `qwen3.6:27b-q4_K_M`。
+- 默认端点 `http://127.0.0.1:18080/v1`（llama.cpp llama-server OpenAI 兼容端点）、默认模型 `qwen3.8-27b-local`（llama-server `/v1/models` 返回的实际模型 ID）。
 - 若你的 llama-server 运行在不同地址 / 端口 / 模型，用环境变量覆盖：
   - `RAG_LLM_LOCAL_BASE_URL`：本地 llama 端点（默认 `http://127.0.0.1:18080/v1`）
-  - `RAG_LLM_LOCAL_MODEL`：本地模型名（默认 `qwen3.6:27b-q4_K_M`）
+  - `RAG_LLM_LOCAL_MODEL`：本地模型名（默认 `qwen3.8-27b-local`）
   - `RAG_LLM_LOCAL_API_KEY`：本地端点所需 Key（llama-server 启用 `--api-key` 鉴权时必填，否则留空）
+  - `RAG_LLM_TIMEOUT_SECONDS`：LLM 请求超时（默认 120 秒）。本地推理模型含思考过程、耗时较长，若仍超时再调大
 
 联网模型（DeepSeek）：
 
