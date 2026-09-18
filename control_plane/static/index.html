@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>资料预评估与知识库问答</title>
+    <title>Agent 行动安全网关 · 演示</title>
     <link rel="stylesheet" href="/demo/style.css" />
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
         <div class="topbar-title">
-          <h1>资料预评估与知识库问答</h1>
-          <p class="subtitle">统一演示入口：控制面负责身份、权限、报告与审计权威</p>
+          <h1>Agent 行动安全网关 · 演示</h1>
+          <p class="subtitle">控制面负责身份、权限、报告与审计权威；所有结果仅供演示参考，不构成贷款、授信或金融产品结论</p>
         </div>
         <div class="user-area hidden" id="user-area">
           <div class="user-chip" id="user-chip" title="">
@@ -37,6 +37,9 @@
           </label>
           <button type="submit">登录</button>
         </form>
+        <p class="muted login-hint">
+          演示账号：<strong>alice</strong> / demo-a-password（有权限）、<strong>bob</strong> / demo-b-password（越权负向）、<strong>carol</strong> / demo-c-password（计划执行）、<strong>dave</strong> / demo-d-password（审批者）。
+        </p>
         <p id="login-status" class="status"></p>
       </section>
 
@@ -45,11 +48,18 @@
           <button class="tab active" data-tab="assessment">资料预评估</button>
           <button class="tab" data-tab="qa">知识库问答</button>
           <button class="tab" data-tab="knowledge">已建库文件</button>
+          <button class="tab" data-tab="plan">计划执行演示</button>
         </div>
 
         <div id="assessment" class="tab-panel">
           <h2>资料预评估报告展示</h2>
           <p>确定性匹配结果 + 版本化引用 + 免责声明；不构成贷款、授信或金融产品结论。</p>
+          <div class="demo-guide">
+            <strong>本页两种评估方式：</strong>
+            ① <em>受控样例评估</em>：选择 import-manifest 白名单内 6 个受控样例文件，匹配规则夹具；
+            ② <em>真实材料评估</em>：上传自己的真实 PDF/DOCX（≤2MB），为每个文件选择它对应的材料类别，系统按演示银行规则做资料匹配度预评估。
+            规则按「文件类别」匹配，真实材料只用于演示资料完整度，不产生授信/额度结论。
+          </div>
           <form id="assessment-form">
             <input type="hidden" name="file_names" value="" />
             <input type="hidden" name="scenario" value="finance_profile_matching" />
@@ -63,6 +73,19 @@
               <p id="file-picker-status" class="file-status">未选择文件。</p>
             </div>
             <button type="submit">生成预评估报告</button>
+          </form>
+          <form id="real-assessment-form">
+            <div class="file-picker">
+              <h3>真实材料评估（上传自己的 PDF/DOCX）</h3>
+              <p class="muted">
+                为每个文件选择它对应的材料类别（资料概览 / 收入情况 / 资金流 / 资产负债 / 经营情况 / 补充材料清单），
+                然后点击「评估真实材料」。
+              </p>
+              <input id="real-file-picker" type="file" accept=".pdf,.docx" multiple />
+              <div id="real-material-items" class="uploaded-list"></div>
+              <p id="real-file-status" class="file-status">未选择文件。</p>
+            </div>
+            <button type="submit">评估真实材料</button>
           </form>
           <div id="assessment-result" class="report-area">
             <p class="report-empty">评估报告将在此展示</p>
@@ -139,6 +162,49 @@
           <div class="file-picker knowledge-manage" id="knowledge-manage">
             <h3>已建库文件列表</h3>
             <div id="knowledge-file-list" class="uploaded-list"></div>
+          </div>
+        </div>
+
+        <div id="plan" class="tab-panel hidden">
+          <h2>计划执行与验证闭环演示</h2>
+          <p>
+            演示 Agent 行动安全网关的「计划 → 审批 → 执行 → 独立读回验证」闭环：
+            <strong>carol</strong> 有行动权限（发起），<strong>dave</strong> 是独立审批者；
+            发起人不能审批自己的计划（四眼原则）。移动操作自确认即执行，
+            删除操作需审批；执行后独立读回验证（VERIFIED / MISMATCH）。
+          </p>
+          <div class="file-picker">
+            <h3>① 上传演示文件（carol）</h3>
+            <p class="muted">上传任意文件到受控目录 organized/（≤2MB）；bob 尝试上传会被 403 拒绝。</p>
+            <div class="upload-row">
+              <input id="plan-file-picker" type="file" />
+              <button type="button" id="plan-upload-btn">上传到 organized/</button>
+            </div>
+            <p id="plan-upload-status" class="file-status">未上传文件。</p>
+          </div>
+          <div class="file-picker">
+            <h3>② 执行操作（carol）</h3>
+            <p>当前演示文件：<span id="plan-current-file">（无）</span></p>
+            <div class="plan-actions">
+              <button type="button" id="plan-move-btn">移动（SELF_CONFIRM）</button>
+              <button type="button" id="plan-trash-btn">删除（APPROVAL_REQUIRED）</button>
+            </div>
+            <p id="plan-action-status" class="file-status"></p>
+            <pre id="plan-result" class="output"></pre>
+          </div>
+          <div class="file-picker">
+            <h3>③ 审批（dave 登录后，四眼原则）</h3>
+            <p class="muted">carol 建删除计划后需切换 dave 账号审批；carol 尝试自批会被 403 拒绝。</p>
+            <button type="button" id="plan-approvals-refresh" class="ghost">刷新待审批</button>
+            <div id="plan-approvals-list" class="uploaded-list"></div>
+            <p id="plan-approval-status" class="file-status"></p>
+          </div>
+          <div class="file-picker">
+            <h3>④ 恢复任务（验证失败时出现）</h3>
+            <p class="muted">执行后读回验证失败（MISMATCH）会生成恢复任务；可标记 recovered / escalated。</p>
+            <button type="button" id="plan-recovery-refresh" class="ghost">刷新恢复任务</button>
+            <div id="plan-recovery-list" class="uploaded-list"></div>
+            <p id="plan-recovery-status" class="file-status"></p>
           </div>
         </div>
       </section>

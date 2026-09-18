@@ -39,9 +39,12 @@
   }
 
   async function jsonRequest(path, options) {
+    const headers = {};
+    if (options.headers) Object.assign(headers, options.headers);
+    if (options.body) headers["Content-Type"] = "application/json";
     const response = await fetch(path, {
       method: options.method || "POST",
-      headers: options.body ? { "Content-Type": "application/json" } : undefined,
+      headers: headers,
       body: options.body ? JSON.stringify(options.body) : undefined,
       credentials: "same-origin",
     });
@@ -336,6 +339,7 @@
     resetUploadedMaterials();
     resetKnowledgeFiles();
     resetModelUi();
+    resetPlanDemo();
     activateTab("assessment");
     const status = $("#login-status");
     if (status) status.textContent = "已登出。";
@@ -570,6 +574,10 @@
       panel.classList.toggle("hidden", panel.id !== target);
     });
     if (target === "knowledge") loadKnowledgeFiles();
+    if (target === "plan") {
+      refreshPlanApprovals();
+      refreshPlanRecovery();
+    }
   }
 
   function collectControlledFileNames(picker) {
@@ -822,6 +830,303 @@
     activateTab(target);
   }
 
+  // ---------- 计划执行演示（tab: plan） ----------
+  let planCurrentFile = null;
+
+  function planStatus(selector, message, isError) {
+    const status = $(selector);
+    if (!status) return;
+    status.className = "file-status" + (isError ? " file-status-error" : " file-status-ok");
+    status.textContent = message;
+  }
+
+  function renderPlanResult(value) {
+    const area = $("#plan-result");
+    if (!area) return;
+    area.replaceChildren();
+    if (value === undefined || value === null) return;
+    area.textContent =
+      typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  }
+
+  function planIdempotencyKey(prefix) {
+    const random =
+      window.crypto && crypto.randomUUID
+        ? crypto.randomUUID()
+        : String(Date.now()) + "-" + Math.random().toString(36).slice(2);
+    return prefix + "-" + random;
+  }
+
+  async function planUpload() {
+    const picker = $("#plan-file-picker");
+    const file = picker && picker.files && picker.files[0];
+    if (!file) {
+      planStatus("#plan-upload-status", "请先选择要上传的文件。", true);
+      return;
+    }
+    planStatus("#plan-upload-status", "正在上传…");
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const payload = await multipartRequest("/api/demo/plan-demo/upload", formData);
+      planCurrentFile = payload.file_name;
+      const current = $("#plan-current-file");
+      if (current) current.textContent = "organized/" + payload.file_name;
+      planStatus(
+        "#plan-upload-status",
+        "已上传并激活：organized/" + payload.file_name + "（授权裁决 " + payload.decision.state + "）"
+      );
+      picker.value = "";
+      renderPlanResult({
+        动作: "上传（UPLOAD · 直接执行）",
+        文件: payload.path,
+        版本: payload.version_id,
+        指纹: payload.content_fingerprint,
+      });
+    } catch (error) {
+      const hint =
+        error.status === 403 ? "（当前账号无 UPLOAD 权限，请用 carol 登录）" : "";
+      planStatus("#plan-upload-status", "上传失败：" + error.message + hint, true);
+      renderPlanResult("上传失败：" + error.message + hint);
+    }
+  }
+
+  async function planCreateAndConfirm(operation) {
+    const plan = await jsonRequest("/api/plans", {
+      body: { operations: [operation], expires_at: "2099-12-31T23:59:59Z" },
+    });
+    const p = plan.plan;
+    return jsonRequest("/api/plans/" + p.plan_id + "/confirm", {
+      body: { expected_plan_hash: p.plan_hash },
+      headers: { "Idempotency-Key": planIdempotencyKey("plan-demo") },
+    });
+  }
+
+  async function planMove() {
+    if (!planCurrentFile) {
+      renderPlanResult("请先上传演示文件（① 步）。");
+      return;
+    }
+    const source = "organized/" + planCurrentFile;
+    const dot = planCurrentFile.lastIndexOf(".");
+    const base = dot > 0 ? planCurrentFile.slice(0, dot) : planCurrentFile;
+    const ext = dot > 0 ? planCurrentFile.slice(dot) : "";
+    const target = "organized/" + base + "-moved" + ext;
+    renderPlanResult("正在创建移动计划并确认执行…");
+    try {
+      const outcome = await planCreateAndConfirm({
+        operation_id: "op-move-" + Date.now(),
+        type: "move_rename",
+        source_path: source,
+        target_path: target,
+      });
+      planCurrentFile = target.split("/").pop();
+      const current = $("#plan-current-file");
+      if (current) current.textContent = target;
+      renderPlanOutcome("移动（MOVE_RENAME · SELF_CONFIRM）", outcome);
+    } catch (error) {
+      const hint =
+        error.status === 403 ? "（当前账号无 MOVE_RENAME 权限，请用 carol 登录）" : "";
+      renderPlanResult("移动失败：" + error.message + hint);
+    }
+  }
+
+  async function planTrash() {
+    if (!planCurrentFile) {
+      renderPlanResult("请先上传演示文件（① 步）。");
+      return;
+    }
+    const source = "organized/" + planCurrentFile;
+    renderPlanResult("正在创建删除计划并确认…");
+    try {
+      const outcome = await planCreateAndConfirm({
+        operation_id: "op-trash-" + Date.now(),
+        type: "trash",
+        source_path: source,
+      });
+      renderPlanOutcome("删除（TRASH · APPROVAL_REQUIRED）", outcome);
+    } catch (error) {
+      const hint =
+        error.status === 403 ? "（当前账号无 TRASH 权限，请用 carol 登录）" : "";
+      renderPlanResult("删除失败：" + error.message + hint);
+    }
+  }
+
+  function renderPlanOutcome(label, outcome) {
+    const job = outcome.execution_job;
+    const approval = outcome.approval;
+    const plan = outcome.plan;
+    renderPlanResult({
+      操作: label,
+      计划状态: plan ? plan.state : "（无）",
+      决策: plan ? plan.decision_state : "（无）",
+      执行状态: job ? job.state : "（待审批）",
+      审批号: approval ? approval.approval_id : null,
+      提示: approval
+        ? "删除计划已进入审批队列：登出后以 dave 登录，在 ③ 审批区批准（发起人不可自批）。"
+        : "执行完成，独立读回验证通过（VERIFIED）。",
+    });
+  }
+
+  async function refreshPlanApprovals() {
+    const list = $("#plan-approvals-list");
+    const status = $("#plan-approval-status");
+    if (list) list.replaceChildren();
+    try {
+      const payload = await jsonRequest("/api/approvals/pending", { method: "GET" });
+      const approvals = payload.approvals || [];
+      if (status) {
+        status.className = "file-status";
+        status.textContent = "待审批 " + approvals.length + " 条。";
+      }
+      if (list) {
+        approvals.forEach((approval) => {
+          const item = el("li", "uploaded-file");
+          const info = el(
+            "span",
+            null,
+            "计划 " + approval.plan_id.slice(0, 8) +
+            " · 发起人 " + approval.requester_id +
+            " · 需角色 " + approval.required_role_id
+          );
+          item.appendChild(info);
+          const approveBtn = el("button", "uploaded-file-btn", "批准");
+          approveBtn.type = "button";
+          approveBtn.addEventListener("click", () =>
+            decideApproval(approval, "approved")
+          );
+          const rejectBtn = el("button", "uploaded-file-btn", "驳回");
+          rejectBtn.type = "button";
+          rejectBtn.addEventListener("click", () =>
+            decideApproval(approval, "rejected")
+          );
+          item.appendChild(approveBtn);
+          item.appendChild(rejectBtn);
+          list.appendChild(item);
+        });
+      }
+    } catch (error) {
+      if (status) {
+        status.className = "file-status file-status-error";
+        status.textContent = "加载待审批失败：" + error.message;
+      }
+    }
+  }
+
+  async function decideApproval(approval, decision) {
+    const status = $("#plan-approval-status");
+    try {
+      await jsonRequest("/api/approvals/" + approval.approval_id + "/decide", {
+        body: { decision: decision, expected_plan_hash: approval.plan_hash || "" },
+        headers: { "Idempotency-Key": planIdempotencyKey("approve") },
+      });
+      if (status) {
+        status.className = "file-status file-status-ok";
+        status.textContent =
+          "已" + (decision === "approved" ? "批准" : "驳回") +
+          "计划 " + approval.plan_id.slice(0, 8) +
+          (decision === "approved" ? "，执行并读回验证通过（VERIFIED）。" : "。");
+      }
+      refreshPlanApprovals();
+    } catch (error) {
+      if (status) {
+        status.className = "file-status file-status-error";
+        status.textContent = "审批失败：" + error.message;
+      }
+    }
+  }
+
+  async function refreshPlanRecovery() {
+    const list = $("#plan-recovery-list");
+    const status = $("#plan-recovery-status");
+    if (list) list.replaceChildren();
+    try {
+      const payload = await jsonRequest("/api/recovery-tasks", { method: "GET" });
+      const tasks = payload.tasks || [];
+      if (status) {
+        status.className = "file-status";
+        status.textContent = "恢复任务 " + tasks.length + " 条。";
+      }
+      if (list) {
+        if (!tasks.length) {
+          list.appendChild(el("p", "file-status", "当前无恢复任务（验证失败时产生）。"));
+        }
+        tasks.forEach((task) => {
+          const item = el("li", "uploaded-file");
+          item.appendChild(
+            el(
+              "span",
+              null,
+              task.recovery_id.slice(0, 8) +
+                " · " + task.state +
+                " · " + (task.reason || "")
+            )
+          );
+          if (task.state === "pending") {
+            const recoveredBtn = el("button", "uploaded-file-btn", "标记 recovered");
+            recoveredBtn.type = "button";
+            recoveredBtn.addEventListener("click", () =>
+              resolveRecovery(task, "recovered")
+            );
+            const escalatedBtn = el("button", "uploaded-file-btn", "标记 escalated");
+            escalatedBtn.type = "button";
+            escalatedBtn.addEventListener("click", () =>
+              resolveRecovery(task, "escalated")
+            );
+            item.appendChild(recoveredBtn);
+            item.appendChild(escalatedBtn);
+          }
+          list.appendChild(item);
+        });
+      }
+    } catch (error) {
+      if (status) {
+        status.className = "file-status file-status-error";
+        status.textContent = "加载恢复任务失败：" + error.message;
+      }
+    }
+  }
+
+  async function resolveRecovery(task, decision) {
+    const status = $("#plan-recovery-status");
+    try {
+      await jsonRequest("/api/recovery-tasks/" + task.recovery_id + "/resolve", {
+        body: { decision: decision },
+      });
+      if (status) {
+        status.className = "file-status file-status-ok";
+        status.textContent = "恢复任务 " + task.recovery_id.slice(0, 8) + " 已标记 " + decision + "。";
+      }
+      refreshPlanRecovery();
+    } catch (error) {
+      if (status) {
+        status.className = "file-status file-status-error";
+        status.textContent = "恢复操作失败：" + error.message;
+      }
+    }
+  }
+
+  function resetPlanDemo() {
+    planCurrentFile = null;
+    const current = $("#plan-current-file");
+    if (current) current.textContent = "（无）";
+    const picker = $("#plan-file-picker");
+    if (picker) picker.value = "";
+    ["#plan-upload-status", "#plan-action-status", "#plan-approval-status", "#plan-recovery-status"].forEach((selector) => {
+      const status = $(selector);
+      if (status) {
+        status.className = "file-status";
+        status.textContent = "";
+      }
+    });
+    const result = $("#plan-result");
+    if (result) result.replaceChildren();
+    const approvals = $("#plan-approvals-list");
+    if (approvals) approvals.replaceChildren();
+    const recovery = $("#plan-recovery-list");
+    if (recovery) recovery.replaceChildren();
+  }
+
   const logoutBtn = $("#logout-btn");
   if (logoutBtn) logoutBtn.addEventListener("click", logout);
   const userChip = $("#user-chip");
@@ -858,6 +1163,20 @@
   }
   const qaUploadBtn = $("#qa-upload-btn");
   if (qaUploadBtn) qaUploadBtn.addEventListener("click", uploadRealMaterial);
+  const planUploadBtn = $("#plan-upload-btn");
+  if (planUploadBtn) planUploadBtn.addEventListener("click", planUpload);
+  const planMoveBtn = $("#plan-move-btn");
+  if (planMoveBtn) planMoveBtn.addEventListener("click", planMove);
+  const planTrashBtn = $("#plan-trash-btn");
+  if (planTrashBtn) planTrashBtn.addEventListener("click", planTrash);
+  const planApprovalsRefresh = $("#plan-approvals-refresh");
+  if (planApprovalsRefresh) {
+    planApprovalsRefresh.addEventListener("click", refreshPlanApprovals);
+  }
+  const planRecoveryRefresh = $("#plan-recovery-refresh");
+  if (planRecoveryRefresh) {
+    planRecoveryRefresh.addEventListener("click", refreshPlanRecovery);
+  }
   document.querySelectorAll(".tab").forEach((button) => {
     button.addEventListener("click", switchTab);
   });

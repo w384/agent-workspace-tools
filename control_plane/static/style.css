@@ -516,3 +516,33 @@ button[type="submit"]:hover {
 .knowledge-file-del:hover {
   background: var(--danger-soft);
 }
+
+/* 演示包装：登录提示 / 演示说明 / 计划执行演示 */
+.login-hint {
+  margin: 10px 0 4px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.demo-guide {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 9px;
+  background: var(--accent-soft);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.uploaded-list li .uploaded-file-btn {
+  margin-left: 4px;
+}
+

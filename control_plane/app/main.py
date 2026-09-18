@@ -963,7 +963,7 @@ def create_app(
                 "Execution did not verify against target state",
                 details=details,
             ) from error
-        return _confirmation_payload(outcome)
+        return _confirmation_payload(outcome, app.state.repository)
 
     @app.get("/api/approvals/pending")
     def pending_approvals(
@@ -971,7 +971,7 @@ def create_app(
     ) -> dict[str, object]:
         return {
             "approvals": [
-                _approval_payload(approval)
+                _approval_payload(approval, app.state.repository)
                 for approval in service.list_pending_approvals(actor)
             ]
         }
@@ -1024,7 +1024,7 @@ def create_app(
                 "Execution did not verify against target state",
                 details=details,
             ) from error
-        return _approval_decision_payload(outcome)
+        return _approval_decision_payload(outcome, app.state.repository)
 
     @app.get("/api/recovery-tasks")
     def list_recovery_tasks(
@@ -1136,28 +1136,39 @@ def _latest_pending_recovery_payload(service, actor, plan_id: str) -> dict[str, 
     return _recovery_task_payload(latest)
 
 
-def _approval_payload(approval) -> dict[str, object]:
-    return asdict(approval)
+def _approval_payload(approval, repository=None) -> dict[str, object]:
+    payload = asdict(approval)
+    if repository is not None:
+        try:
+            plan = repository.get_plan(approval.plan_id)
+        except KeyError:
+            plan = None
+        if plan is not None:
+            payload["plan_hash"] = plan.plan_hash
+            payload["plan_decision_state"] = plan.decision_state.value
+    return payload
 
 
 def _job_payload(job) -> dict[str, object]:
     return asdict(job)
 
 
-def _confirmation_payload(outcome) -> dict[str, object]:
+def _confirmation_payload(outcome, repository) -> dict[str, object]:
     payload: dict[str, object] = {
         "plan": _plan_payload(outcome.plan),
         "confirmation": asdict(outcome.confirmation),
     }
     if outcome.approval is not None:
-        payload["approval"] = _approval_payload(outcome.approval)
+        payload["approval"] = _approval_payload(outcome.approval, repository)
     if outcome.execution_job is not None:
         payload["execution_job"] = _job_payload(outcome.execution_job)
     return payload
 
 
-def _approval_decision_payload(outcome) -> dict[str, object]:
-    payload: dict[str, object] = {"approval": _approval_payload(outcome.approval)}
+def _approval_decision_payload(outcome, repository) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "approval": _approval_payload(outcome.approval, repository)
+    }
     if outcome.execution_job is not None:
         payload["execution_job"] = _job_payload(outcome.execution_job)
     return payload
