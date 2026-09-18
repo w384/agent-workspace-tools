@@ -68,3 +68,14 @@ Key 通过环境变量 / 密钥管理注入，不写入代码与仓库。
 - 本地完整备份：`D:\AI\Codex\Backups\agent-workspace-tools-2026-08-20`（工作树快照 + `agent-workspace-tools.bundle` 完整 git 历史）。
 - GitHub origin/main 与本地 main 一致（52b9338），可随时 `git reset --hard origin/main` 回滚。
 
+## 7. 实际部署记录（2026-09-18）
+
+- 服务器：106.53.200.115（内网 10.1.0.4），Ubuntu 24.04.4 LTS（x86_64），2C2G / 40G 盘（低于 4G 建议值但内存态演示可跑）。
+- 部署位置：`/opt/agent-workspace-tools`（git clone 自 GitHub origin/main，部署时 HEAD=0adcb44）。
+- 运行方式：systemd 单元 `agent-demo.service`（WorkingDirectory=/opt/agent-workspace-tools，`ExecStart=.venv/bin/python scripts/init_demo_financial_preassessment.py --host 0.0.0.0 --port 8891`，Restart=on-failure，开机自启）。单元文件已 scp 至 `/etc/systemd/system/agent-demo.service`。
+- 环境：Python 3.12.3（apt 装 python3-venv/python3-pip）+ venv + `service/requirements.txt`（pip 走 `mirrors.cloud.tencent.com/pypi/simple` 腾讯内网镜像）。
+- 安全组：公网放行 22（部署期临时 0.0.0.0/0，建议收紧）+ 8891（0.0.0.0/0，演示端口）。SSH 为 ed25519 私钥登录（C:\Users\tianh\.ssh\id_rsa_demo）。
+- DeepSeek Key：未注入环境变量，按 Q 选择「页面填写」（登录后切联网模型填 Key，登出即清空）。
+- 验证（公网冒烟 2026-09-18）：/demo/ 200；alice 登录 200；预评估 MATCH 100 / missing=0；本地问答 REFUSED(llm_unavailable)（云端无本地模型，符合第 4 节口径）；bob 越权 DENIED / retrieved=0 / LLM 零调用。
+- 备注：本地 HEAD 多出的文档提交 098cbc6（runbook 同步）当时未推送，未进入部署 clone（仅文档差异，不影响运行）。
+
