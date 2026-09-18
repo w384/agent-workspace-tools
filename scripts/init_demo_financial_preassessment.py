@@ -59,6 +59,16 @@ QUERY_PATH_PREFIX = "客户模拟资料"
 GRANT_ID = "finance-demo-query-seed"
 WORKSPACE_ID = "workspace-a"
 ACTOR_ID = "user-a"
+CAROL_ID = "user-c"
+CAROL_PASSWORD = "demo-c-password"
+CAROL_ACTIONS_PATH_PREFIX = "organized"
+CAROL_ACTION_GRANT_IDS = {
+    Action.UPLOAD: "plan-demo-upload-grant",
+    Action.MOVE_RENAME: "plan-demo-move-grant",
+    Action.TRASH: "plan-demo-trash-grant",
+}
+DAVE_ID = "user-d"
+DAVE_PASSWORD = "demo-d-password"
 CONTEXT_VERSION = "acl_2026_08_13"
 RULE_SUMMARY = "受控虚构演示规则，不含真实银行规则。"
 DEFAULT_HOST = "127.0.0.1"
@@ -137,6 +147,23 @@ def seed_financial_preassessment_demo(
                 effect=GrantEffect.ALLOW,
             )
         )
+
+    # 计划执行演示身份 carol（user-c）：授行动权限（upload/move/trash on organized/），
+    # 由 init 脚本 serve 分支把 carol 接为 role-approver-demo 审批者。idempotent。
+    for action, grant_id in CAROL_ACTION_GRANT_IDS.items():
+        if grant_id not in repository.permission_grants:
+            repository.add_permission_grant(
+                PermissionGrant(
+                    grant_id=grant_id,
+                    workspace_id=workspace_id,
+                    context_version=context_version,
+                    principal_type=PrincipalType.USER,
+                    principal_id=CAROL_ID,
+                    action=action,
+                    path_prefix=CAROL_ACTIONS_PATH_PREFIX,
+                    effect=GrantEffect.ALLOW,
+                )
+            )
 
     for entry in manifest["assets"]:
         if not isinstance(entry, dict) or set(entry) != {"relative_path", "material_key"}:
@@ -433,6 +460,24 @@ def main(argv: list[str] | None = None) -> int:
                 group_ids=frozenset({"staff"}),
                 role_ids=frozenset({"role-member-demo"}),
             ),
+            "carol": DemoIdentity(
+                username="carol",
+                password=CAROL_PASSWORD,
+                actor_id=CAROL_ID,
+                workspace_id=WORKSPACE_ID,
+                context_version=CONTEXT_VERSION,
+                group_ids=frozenset({"staff"}),
+                role_ids=frozenset({"role-member-demo", "role-approver-demo"}),
+            ),
+            "dave": DemoIdentity(
+                username="dave",
+                password=DAVE_PASSWORD,
+                actor_id=DAVE_ID,
+                workspace_id=WORKSPACE_ID,
+                context_version=CONTEXT_VERSION,
+                group_ids=frozenset({"staff"}),
+                role_ids=frozenset({"role-approver-demo"}),
+            ),
         },
         internal_service_key="demo-internal-key",
         approver_role_id="role-approver-demo",
@@ -441,7 +486,9 @@ def main(argv: list[str] | None = None) -> int:
     print(
         "serving /demo at http://"
         f"{args.host}:{args.port}  (logins: alice / demo-a-password, "
-        "bob / demo-b-password [no-query user]; "
+        "bob / demo-b-password [no-query user], "
+        "carol / demo-c-password [plan-execution], "
+        "dave / demo-d-password [approver]; "
         "计划执行闭环已启用: controlled-actions="
         f"{controlled_actions_dir})"
     )

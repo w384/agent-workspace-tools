@@ -15,10 +15,12 @@ from pydantic import BaseModel
 from .domain import (
     Action,
     AuditEvent,
+    DecisionState,
     PermissionGrant,
     PrincipalType,
     TrustedActorContext,
 )
+from .policy import evaluate_authorization
 from .ports import FileExecutorPort, RagPort, VerificationPort
 from .repository import ControlPlaneRepository
 from .service import (
@@ -673,6 +675,119 @@ def create_app(
             {"file_name": file_name, "path": path},
         )
         return {"deleted": file_name, "path": path}
+
+
+    @app.post("/api/demo/plan-demo/upload")
+    async def plan_demo_upload(
+        file: UploadFile = File(...),
+        actor: TrustedActorContext = Depends(require_actor),
+    ) -> dict[str, object]:
+        """计划执行演示专用上传（organized/ 目录）。
+
+        不走通用 /api/uploads 的 rag enqueue（金融桥按约束拒绝任意上传），
+        也不建向量索引；授权 → 落盘（controlled-actions/organized/）→
+        建 Asset/AssetVersion → 走到 ready 并激活，供计划执行与读回验证使用。
+        """
+        file_name = _require_upload_file_name(file.filename or "")
+        content = await file.read()
+        if not content:
+            raise ApiError(422, "empty_file", "Uploaded file is empty")
+        if len(content) > MAX_KNOWLEDGE_UPLOAD_BYTES:
+            raise ApiError(
+                422,
+                "file_too_large",
+                "Uploaded file exceeds the 2MB demo limit",
+            )
+        directory = "organized"
+        final_path = f"{directory}/{file_name}"
+        repository = app.state.repository
+        overwrite = (
+            repository.find_asset_by_path(actor.workspace_id, final_path) is not None
+        )
+        decision = evaluate_authorization(
+            actor=actor,
+            grants=repository.list_permission_grants(actor),
+            action=Action.UPLOAD,
+            paths=(final_path,),
+            overwrite=overwrite,
+        )
+        if decision.state is not DecisionState.DIRECT:
+            _append_knowledge_audit(
+                repository,
+                actor,
+                "plan_demo_upload_denied",
+                {
+                    "action": Action.UPLOAD.value,
+                    "path": final_path,
+                    "reason": decision.reason,
+                },
+            )
+            raise ApiError(403, "upload_denied", "Upload is not authorized")
+        try:
+            executor_result = app.state.file_executor.upload(
+                actor=actor,
+                directory=directory,
+                file_name=file_name,
+                content=content,
+                request_id=actor.request_id,
+            )
+        except FileExistsError:
+            raise ApiError(
+                409,
+                "upload_target_exists",
+                "Upload target already exists",
+            )
+        except Exception:
+            raise ApiError(
+                502,
+                "executor_upload_failed",
+                "File upload failed",
+            )
+        if executor_result.path != final_path or executor_result.name != file_name:
+            raise ApiError(
+                502,
+                "executor_result_mismatch",
+                "Executor result does not match the authorized upload target",
+            )
+        asset = repository.get_or_create_asset(
+            actor.workspace_id, executor_result.path, executor_result.name, actor.actor_id
+        )
+        asset_version = repository.create_asset_version(
+            asset.asset_id,
+            executor_result.content_fingerprint,
+            executor_result.path,
+        )
+        for state in ("parsing", "indexed", "ready"):
+            repository.transition_asset_version(asset_version.asset_version_id, state)
+        repository.activate_asset_version(asset_version.asset_version_id)
+        _append_knowledge_audit(
+            repository,
+            actor,
+            "plan_demo_upload_authorized",
+            {
+                "file_name": file_name,
+                "path": final_path,
+                "size_bytes": len(content),
+                "mime_type": "application/octet-stream",
+            },
+        )
+        _append_knowledge_audit(
+            repository,
+            actor,
+            "asset_version_activated",
+            {
+                "asset_id": asset.asset_id,
+                "asset_version_id": asset_version.asset_version_id,
+            },
+        )
+        return {
+            "asset_id": asset.asset_id,
+            "file_name": file_name,
+            "path": final_path,
+            "version_id": asset_version.asset_version_id,
+            "content_fingerprint": executor_result.content_fingerprint,
+            "decision": {"state": decision.state.value, "reason": decision.reason},
+        }
 
 
     @app.get("/api/llm/provider")
