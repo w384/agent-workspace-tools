@@ -670,7 +670,7 @@
       checkbox.checked = qaCheckedUploaded.has(name);
       checkbox.addEventListener("change", () => toggleUploadedFile(name, checkbox.checked));
       label.appendChild(checkbox);
-      label.appendChild(document.createTextNode(name));
+      label.appendChild(el("span", "uploaded-file-name", name));
       item.appendChild(label);
       list.appendChild(item);
     });

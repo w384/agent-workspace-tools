@@ -547,16 +547,25 @@ button[type="submit"]:hover {
 }
 
 .uploaded-file-label {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   cursor: pointer;
   font-size: 13px;
-  word-break: break-word;
+}
+
+.uploaded-file-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .uploaded-file-check {
   flex-shrink: 0;
+  width: auto;
+  padding: 0;
+  border: 0;
   accent-color: var(--accent-dark);
 }
 
